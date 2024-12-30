@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Typography, Space } from 'antd';
+import { Button, Typography, Space, Link } from 'antd';
 import { useHistory } from 'react-router-dom';
 
 const { Title } = Typography;
@@ -25,6 +25,13 @@ function Welcome() {
             onClick={() => history.push('/login')}
           >
             退出登录
+          </Button>
+          <Button 
+            size="large"
+            onClick={() => history.push('/system-init')}
+            style={{ width: '100%' }}
+          >
+            系统初始化
           </Button>
         </Space>
       </div>

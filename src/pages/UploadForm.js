@@ -2,15 +2,10 @@ import React, { useState } from 'react';
 import { Form, Upload, Button, Card, Typography, Input, message, Progress, Space, Row, Col } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useHistory } from 'react-router-dom';
+import { apiFetch, config } from '../utils/apiFetch';
 
 const { Title } = Typography;
 const { TextArea } = Input;
-
-// 配置对象
-const config = {
-  apiBaseUrl: '/api', // 添加 /api 前缀
-  maxConcurrentUploads: 3,
-};
 
 function UploadForm() {
   const history = useHistory();
@@ -19,48 +14,6 @@ function UploadForm() {
   const [uploading, setUploading] = useState(false);
   const [chunkProgress, setChunkProgress] = useState({});
   const [selectedFile, setSelectedFile] = useState(null);
-
-  const apiFetch = async (endpoint, options) => {
-    try {
-      const response = await fetch(`${config.apiBaseUrl}${endpoint}`, options);
-      const data = await response.json();
-      
-      if (!response.ok) {
-        message.error({
-          content: data.message || `请求失败: ${response.status}`,
-          duration: 3,
-          style: {
-            marginTop: '20vh',
-          },
-        });
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
-      }
-      
-      if (data.status !== 1 || data.code !== "0") {
-        message.error({
-          content: data.message || '操作失败',
-          duration: 3,
-          style: {
-            marginTop: '20vh',
-          },
-        });
-        throw new Error(data.message || '操作失败');
-      }
-      
-      return data;
-    } catch (error) {
-      if (!error.message.includes('HTTP error') && !error.message.includes('操作失败')) {
-        message.error({
-          content: error.message || '请求失败',
-          duration: 3,
-          style: {
-            marginTop: '20vh',
-          },
-        });
-      }
-      throw error;
-    }
-  };
 
   const uploadChunk = async (file, chunk, fileId) => {
     try {
