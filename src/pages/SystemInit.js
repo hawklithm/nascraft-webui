@@ -49,15 +49,17 @@ const SystemInit = () => {
   const handleInitialize = async () => {
     setLoading(true);
     try {
-      await initializeSystem();
-      setInitStatus({
-        database: true,
-        config: true,
-        users: true
+      const { error, data } = await apiFetch('/ensure_table_structure', {
+        method: 'POST'
       });
-      message.success('系统初始化成功！');
-      setIsInitialized(true);
-      history.push('/welcome');
+
+      if (!error && data.status === 1) {
+        message.success('系统初始化成功！');
+        setIsInitialized(true);
+        history.push('/welcome');
+      } else {
+        message.error(data.message || '初始化失败');
+      }
     } catch (error) {
       message.error('初始化过程中出现错误：' + error.message);
     } finally {
