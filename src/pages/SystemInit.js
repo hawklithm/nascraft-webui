@@ -67,13 +67,6 @@ const SystemInit = () => {
     }
   };
 
-  const initializeSystem = async () => {
-    // TODO: 添加实际的初始化接口调用
-    return new Promise((resolve) => {
-      setTimeout(resolve, 2000);
-    });
-  };
-
   const getStepStatus = (key) => {
     if (loading) return 'process';
     return initStatus[key] ? 'finish' : 'wait';
@@ -156,19 +149,19 @@ const SystemInit = () => {
           style={{ maxWidth: 600, margin: '0 auto 40px' }}
         >
           <Step 
-            title="数据库初始化" 
+            title="数据库初始化"
             status={getStepStatus('database')}
             icon={getStepIcon('database')}
             description="初始化系统数据库和表结构"
           />
           <Step 
-            title="系统配置" 
+            title="系统配置"
             status={getStepStatus('config')}
             icon={getStepIcon('config')}
             description="配置系统基本参数和运行环境"
           />
           <Step 
-            title="用户初始化" 
+            title="用户初始化"
             status={getStepStatus('users')}
             icon={getStepIcon('users')}
             description="创建管理员账户和基本用户结构"

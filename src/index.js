@@ -1,12 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import 'antd/dist/antd.css';
-import './index.css';
 import App from './App';
+import { ConfigProvider } from 'antd';
+import zhCN from 'antd/lib/locale/zh_CN';
+import enUS from 'antd/lib/locale/en_US';
+
+const language = navigator.language.split(/[-_]/)[0]; // 获取浏览器语言
+const locale = language === 'zh' ? zhCN : enUS;
 
 ReactDOM.render(
-  <React.StrictMode>
+  <ConfigProvider locale={locale}>
     <App />
-  </React.StrictMode>,
+  </ConfigProvider>,
   document.getElementById('root')
 );
