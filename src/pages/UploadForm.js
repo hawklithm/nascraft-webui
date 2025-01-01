@@ -9,7 +9,6 @@ const { TextArea } = Input;
 
 function UploadForm() {
   const history = useHistory();
-  const [fileId, setFileId] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [chunkProgress, setChunkProgress] = useState({});
@@ -84,8 +83,11 @@ function UploadForm() {
         }),
       });
 
-      const metaData = response.data;
-      setFileId(metaData.id);
+      if (response.error) {
+        throw new Error(response.data.message || '提交元数据失败');
+      }
+
+      const metaData = response.data.data;
       const { chunks, total_chunks } = metaData;
       let completedChunks = 0;
 
@@ -119,131 +121,51 @@ function UploadForm() {
       history.push('/welcome');
     } catch (error) {
       console.error('Upload failed:', error);
+      message.error(`上传失败：${error.message}`);
     } finally {
       setUploading(false);
     }
   };
 
-  const onFinish = async (values) => {
-    if (!selectedFile) {
-      message.error({
-        content: '请先选择要上传的文件',
-        duration: 3,
-        style: {
-          marginTop: '20vh',
-        },
-      });
-      return;
-    }
-    await startUpload(selectedFile, values);
-  };
-
   const renderChunkProgress = () => {
     return Object.entries(chunkProgress).map(([offset, progress]) => (
-      <Form.Item 
-        key={offset} 
-        label={`分片 ${parseInt(offset) / 1048576 + 1}`} 
-        wrapperCol={{ span: 24 }}
-      >
+      <div key={offset} style={{ marginBottom: 10 }}>
+        <span>分片 {parseInt(offset) / 1048576 + 1}:</span>
         <Progress percent={progress} size="small" />
-      </Form.Item>
+      </div>
     ));
   };
 
   return (
-    <Row justify="center" align="middle" style={{ minHeight: '100vh', background: '#f0f2f5', padding: 24 }}>
-      <Col xs={24} sm={24} md={20} lg={16} xl={12}>
-        <Card bordered={false}>
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
-            <Title level={2} style={{ textAlign: 'center', margin: 0 }}>
-              文件上传
-            </Title>
-            
-            <Form
-              name="upload"
-              labelCol={{ span: 6 }}
-              wrapperCol={{ span: 18 }}
-              onFinish={onFinish}
-              autoComplete="off"
-              size="large"
-            >
-              <Form.Item
-                label="文件名称"
-                name="filename"
-                rules={[{ required: true, message: '请输入文件名称!' }]}
-              >
-                <Input placeholder="请输入文件名称" />
-              </Form.Item>
-
-              <Form.Item
-                label="文件描述"
-                name="description"
-              >
-                <TextArea rows={4} placeholder="请输入文件描述" />
-              </Form.Item>
-
-              <Form.Item
-                label="选择文件"
-                name="file"
-                rules={[{ required: true, message: '请选择要上传的文件!' }]}
-              >
-                <Upload
-                  beforeUpload={handleBeforeUpload}
-                  maxCount={1}
-                  disabled={uploading}
-                >
-                  <Button icon={<UploadOutlined />} disabled={uploading} block>
-                    选择文件
-                  </Button>
-                </Upload>
-              </Form.Item>
-
-              {uploadProgress > 0 && (
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                  <Form.Item 
-                    label="总体进度" 
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Progress percent={uploadProgress} />
-                  </Form.Item>
-                  <Card
-                    size="small"
-                    title="分片上传进度"
-                    style={{ background: '#fafafa' }}
-                  >
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      {renderChunkProgress()}
-                    </Space>
-                  </Card>
-                </Space>
-              )}
-
-              <Form.Item wrapperCol={{ span: 24 }} style={{ marginTop: 24 }}>
-                <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                  <Button 
-                    type="primary" 
-                    htmlType="submit" 
-                    block
-                    disabled={uploading}
-                    size="large"
-                  >
-                    提交
-                  </Button>
-                  <Button 
-                    block 
-                    onClick={() => history.push('/welcome')}
-                    disabled={uploading}
-                    size="large"
-                  >
-                    返回
-                  </Button>
-                </Space>
-              </Form.Item>
-            </Form>
-          </Space>
-        </Card>
-      </Col>
-    </Row>
+    <Card>
+      <Title level={2}>文件上传</Title>
+      <Form onFinish={(values) => startUpload(selectedFile, values)}>
+        <Form.Item name="filename" label="文件名">
+          <Input placeholder="请输入文件名" />
+        </Form.Item>
+        <Form.Item name="description" label="描述">
+          <TextArea rows={4} placeholder="请输入文件描述" />
+        </Form.Item>
+        <Form.Item>
+          <Upload beforeUpload={handleBeforeUpload} showUploadList={false}>
+            <Button icon={<UploadOutlined />}>选择文件</Button>
+          </Upload>
+        </Form.Item>
+        <Form.Item>
+          <Button type="primary" htmlType="submit" disabled={!selectedFile || uploading}>
+            {uploading ? '上传中...' : '开始上传'}
+          </Button>
+        </Form.Item>
+      </Form>
+      {uploading && (
+        <div>
+          <Progress percent={uploadProgress} />
+          <div style={{ marginTop: 20 }}>
+            {renderChunkProgress()}
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 
