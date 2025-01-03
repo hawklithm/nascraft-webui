@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Form, Upload, Button, Card, Typography, Input, message, Progress, Space, Row, Col } from 'antd';
+import { Form, Upload, Button, Card, Typography, Input, message, Progress, Collapse } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useHistory } from 'react-router-dom';
 import { apiFetch, config } from '../utils/apiFetch';
 
 const { Title } = Typography;
 const { TextArea } = Input;
+const { Panel } = Collapse;
 
 function UploadForm() {
   const history = useHistory();
@@ -160,9 +161,11 @@ function UploadForm() {
       {uploading && (
         <div>
           <Progress percent={uploadProgress} />
-          <div style={{ marginTop: 20 }}>
-            {renderChunkProgress()}
-          </div>
+          <Collapse style={{ marginTop: 20 }}>
+            <Panel header="查看分片上传进度" key="1">
+              {renderChunkProgress()}
+            </Panel>
+          </Collapse>
         </div>
       )}
     </Card>

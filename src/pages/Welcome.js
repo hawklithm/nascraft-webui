@@ -15,6 +15,7 @@ function Welcome() {
       logout: 'Logout',
       systemInit: 'System Initialization',
       switchLanguage: 'Switch to Chinese',
+      viewUploadedFiles: 'View Uploaded Files',
     },
     zh: {
       welcome: '欢迎使用 NASCraft 管理系统',
@@ -22,6 +23,7 @@ function Welcome() {
       logout: '退出登录',
       systemInit: '系统初始化',
       switchLanguage: '切换到英文',
+      viewUploadedFiles: '查看已上传文件',
     },
   };
 
@@ -55,6 +57,13 @@ function Welcome() {
             style={{ width: '100%' }}
           >
             {t.systemInit}
+          </Button>
+          <Button 
+            size="large"
+            onClick={() => history.push('/uploaded-files')}
+            style={{ width: '100%' }}
+          >
+            {t.viewUploadedFiles}
           </Button>
         </Space>
       </div>
