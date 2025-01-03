@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Form, Upload, Button, Card, Typography, Input, message, Progress, Collapse } from 'antd';
+import { Form, Upload, Button, Card, Typography, Input, message, Progress, Collapse, Tag } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useHistory } from 'react-router-dom';
 import { apiFetch, config } from '../utils/apiFetch';
@@ -10,6 +10,7 @@ const { Panel } = Collapse;
 
 function UploadForm() {
   const history = useHistory();
+  const [form] = Form.useForm();
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [chunkProgress, setChunkProgress] = useState({});
@@ -63,6 +64,7 @@ function UploadForm() {
 
   const handleBeforeUpload = (file) => {
     setSelectedFile(file);
+    form.setFieldsValue({ filename: file.name });
     return false; // 阻止自动上传
   };
 
@@ -72,7 +74,7 @@ function UploadForm() {
       setUploadProgress(0);
       setChunkProgress({});
 
-      const response = await apiFetch('/submit_metadata', {
+      const metaData = await apiFetch('/submit_metadata', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,11 +86,6 @@ function UploadForm() {
         }),
       });
 
-      if (response.error) {
-        throw new Error(response.data.message || '提交元数据失败');
-      }
-
-      const metaData = response.data.data;
       const { chunks, total_chunks } = metaData;
       let completedChunks = 0;
 
@@ -117,9 +114,16 @@ function UploadForm() {
         }
       }
 
-      message.success('文件上传成功');
+      message.success({
+        content: (
+          <span>
+            文件上传成功 <Tag color="blue" onClick={() => history.push('/uploaded-files')} style={{ cursor: 'pointer' }}>查看文件</Tag>
+          </span>
+        ),
+        duration: 3,
+      });
+
       setUploadProgress(100);
-      history.push('/welcome');
     } catch (error) {
       console.error('Upload failed:', error);
       message.error(`上传失败：${error.message}`);
@@ -140,7 +144,7 @@ function UploadForm() {
   return (
     <Card>
       <Title level={2}>文件上传</Title>
-      <Form onFinish={(values) => startUpload(selectedFile, values)}>
+      <Form form={form} onFinish={(values) => startUpload(selectedFile, values)}>
         <Form.Item name="filename" label="文件名">
           <Input placeholder="请输入文件名" />
         </Form.Item>
@@ -151,6 +155,11 @@ function UploadForm() {
           <Upload beforeUpload={handleBeforeUpload} showUploadList={false}>
             <Button icon={<UploadOutlined />}>选择文件</Button>
           </Upload>
+          {selectedFile && (
+            <div style={{ marginTop: 10 }}>
+              已选文件: {selectedFile.name}
+            </div>
+          )}
         </Form.Item>
         <Form.Item>
           <Button type="primary" htmlType="submit" disabled={!selectedFile || uploading}>

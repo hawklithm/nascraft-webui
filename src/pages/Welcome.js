@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Button, Typography, Space } from 'antd';
+import { Typography, Space, Tag } from 'antd';
 import { useHistory } from 'react-router-dom';
 
 const { Title } = Typography;
 
 function Welcome() {
   const history = useHistory();
-  const [language, setLanguage] = useState(navigator.language.split(/[-_]/)[0]); // 获取浏览器语言
+  const [language, setLanguage] = useState(navigator.language.split(/[-_]/)[0]);
 
   const translations = {
     en: {
@@ -34,43 +34,28 @@ function Welcome() {
   };
 
   return (
-    <div className="container">
+    <div className="container" style={{ textAlign: 'center', paddingTop: '50px' }}>
       <div className="welcome-content">
         <Title level={1}>{t.welcome}</Title>
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Button 
-            type="primary" 
-            size="large"
-            onClick={() => history.push('/upload')}
-          >
+          <Tag color="blue" onClick={() => history.push('/upload')} style={{ cursor: 'pointer' }}>
             {t.uploadFile}
-          </Button>
-          <Button 
-            size="large"
-            onClick={() => history.push('/login')}
-          >
+          </Tag>
+          <Tag color="blue" onClick={() => history.push('/login')} style={{ cursor: 'pointer' }}>
             {t.logout}
-          </Button>
-          <Button 
-            size="large"
-            onClick={() => history.push('/system-init')}
-            style={{ width: '100%' }}
-          >
+          </Tag>
+          <Tag color="blue" onClick={() => history.push('/system-init')} style={{ cursor: 'pointer' }}>
             {t.systemInit}
-          </Button>
-          <Button 
-            size="large"
-            onClick={() => history.push('/uploaded-files')}
-            style={{ width: '100%' }}
-          >
+          </Tag>
+          <Tag color="blue" onClick={() => history.push('/uploaded-files')} style={{ cursor: 'pointer' }}>
             {t.viewUploadedFiles}
-          </Button>
+          </Tag>
         </Space>
       </div>
       <div style={{ position: 'absolute', top: 20, right: 20 }}>
-        <Button onClick={toggleLanguage}>
+        <Tag color="geekblue" onClick={toggleLanguage} style={{ cursor: 'pointer' }}>
           {t.switchLanguage}
-        </Button>
+        </Tag>
       </div>
     </div>
   );

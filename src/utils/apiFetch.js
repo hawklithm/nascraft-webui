@@ -28,28 +28,23 @@ export const apiFetch = async (endpoint, options = {}) => {
     const response = await fetch(url, config);
     const data = await response.json();
     
-    if (!response.ok) {
+    if (!response.ok || data.status !== 1 || data.code !== "0") {
+      const errorMessage = data.message || `请求失败: ${response.status}`;
       message.error({
-        content: data.message || `请求失败: ${response.status}`,
+        content: errorMessage,
         ...defaultMessageConfig,
       });
-      return { error: true, data };
+      throw new Error(errorMessage);
     }
     
-    // 处理业务逻辑错误
-    if (data.status !== 1 || data.code !== "0") {
-      return { error: true, data };
-    }
-    
-    return { error: false, data };
+    return data.data; // 返回内部的 data 对象
   } catch (error) {
-    // 统一错误处理
     message.error({
       content: error.message || '请求失败',
       ...defaultMessageConfig,
     });
     console.error('API request failed:', error);
-    return { error: true, data: { message: error.message } };
+    throw error; // 继续抛出错误以便调用者处理
   }
 };
 

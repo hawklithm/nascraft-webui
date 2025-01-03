@@ -1,1 +1,15 @@
-/* 可以完全移除这个文件，或者只保留特殊的自定义样式 */
+/* src/App.css */
+
+.logo {
+  height: 32px;
+  margin: 16px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ant-menu-dark.ant-menu-inline .ant-menu-item {
+  color: #fff; /* 白色字体 */
+}
+
+.ant-menu-dark.ant-menu-inline .ant-menu-item-selected {
+  background-color: #85a5ff !important; /* geekblue-3 */
+}

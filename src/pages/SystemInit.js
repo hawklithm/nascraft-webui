@@ -25,22 +25,19 @@ const SystemInit = () => {
 
   const checkSystemStatus = async () => {
     try {
-      const { error, data } = await apiFetch('/check_table_structure', {
+      await apiFetch('/check_table_structure', {
         method: 'GET'
       });
       
-      if (!error && data.status === 1) {
-        setIsInitialized(true);
-        setInitStatus({
-          database: true,
-          config: true,
-          users: true
-        });
-      } else if (data.status === 0) {
-        setErrorData(data.data || []);
-      }
+      setIsInitialized(true);
+      setInitStatus({
+        database: true,
+        config: true,
+        users: true
+      });
     } catch (error) {
       message.error('检查系统状态失败：' + error.message);
+      setErrorData(error.data || []);
     } finally {
       setChecking(false);
     }
@@ -49,17 +46,13 @@ const SystemInit = () => {
   const handleInitialize = async () => {
     setLoading(true);
     try {
-      const { error, data } = await apiFetch('/ensure_table_structure', {
+      await apiFetch('/ensure_table_structure', {
         method: 'POST'
       });
 
-      if (!error && data.status === 1) {
-        message.success('系统初始化成功！');
-        setIsInitialized(true);
-        history.push('/welcome');
-      } else {
-        message.error(data.message || '初始化失败');
-      }
+      message.success('系统初始化成功！');
+      setIsInitialized(true);
+      history.push('/welcome');
     } catch (error) {
       message.error('初始化过程中出现错误：' + error.message);
     } finally {

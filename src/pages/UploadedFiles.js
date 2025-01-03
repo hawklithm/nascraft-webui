@@ -14,15 +14,11 @@ function UploadedFiles() {
 
   const fetchUploadedFiles = async () => {
     try {
-      const response = await apiFetch('/uploaded_files?page=1&page_size=10&status=2&sort_by=size&order=des', {
+      const filesData = await apiFetch('/uploaded_files?page=1&page_size=10&status=2&sort_by=size&order=des', {
         method: 'GET',
       });
 
-      if (response.error) {
-        throw new Error(response.data.message || 'Failed to fetch uploaded files');
-      }
-
-      setFiles(response.data);
+      setFiles(filesData);
     } catch (error) {
       console.error('Error fetching uploaded files:', error);
       message.error(`Error: ${error.message}`);
