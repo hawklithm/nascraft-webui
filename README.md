@@ -1,70 +1,76 @@
-# Getting Started with Create React App
+# NASCraft Web UI
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This project is the frontend for the NASCraft Management System, built with React and Ant Design. It provides a user-friendly interface for managing file uploads, system initialization, and viewing uploaded files.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- **File Upload**: Upload files with progress tracking and chunked uploads.
+- **System Initialization**: Initialize system settings and configurations.
+- **View Uploaded Files**: Browse and manage uploaded files.
+- **Internationalization**: Supports multiple languages with easy switching.
+- **Responsive Design**: Optimized for various screen sizes.
 
-### `npm start`
+## Technologies Used
 
-Runs the app in the development mode.\
+- **React**: A JavaScript library for building user interfaces.
+- **Ant Design**: A UI framework for creating elegant and responsive designs.
+- **React Router**: For handling navigation and routing.
+- **@ant-design/colors**: For consistent color theming.
+- **Fetch API**: For making HTTP requests to the backend.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js and npm installed on your machine.
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/nascraft-webui.git
+   ```
+2. Navigate to the project directory:
+   ```bash
+   cd nascraft-webui
+   ```
+3. Install the dependencies:
+   ```bash
+   npm install
+   ```
+
+### Running the Application
+
+To start the development server, run:
+
+```
+bash
+npm start
+```
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### Building for Production
 
-### `npm test`
+To build the app for production, run:
+```
+bash
+npm run build
+```
+The build artifacts will be stored in the `build/` directory.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Project Structure
 
-### `npm run build`
+- `src/`: Contains the source code.
+  - `pages/`: Different pages of the application.
+  - `components/`: Reusable components.
+  - `utils/`: Utility functions and API calls.
+  - `i18n/`: Internationalization setup.
+- `public/`: Public assets and HTML template.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Contributing
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Contributions are welcome! Please fork the repository and submit a pull request for any improvements.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## License
 
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+This project is licensed under the MIT License.
