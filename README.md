@@ -1,5 +1,7 @@
 # NASCraft Web UI
 
+The repository of the corresponding backend project is [here](https://github.com/hawklithm/nascraft).
+
 This project is the frontend for the NASCraft Management System, built with React and Ant Design. It provides a user-friendly interface for managing file uploads, system initialization, and viewing uploaded files.
 
 ## Features
