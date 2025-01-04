@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Card, Typography, message } from 'antd';
+import { Table, Card, Typography, message, Tag } from 'antd';
 import { apiFetch } from '../utils/apiFetch';
 
 const { Title } = Typography;
@@ -31,6 +31,31 @@ function UploadedFiles() {
     }
   };
 
+  const downloadFile = async (fileId, filename) => {
+    try {
+      const response = await fetch(`/api/download/${fileId}`, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      message.error(`Download failed: ${error.message}`);
+    }
+  };
+
   const columns = [
     {
       title: 'File ID',
@@ -58,6 +83,15 @@ function UploadedFiles() {
       dataIndex: 'status',
       key: 'status',
       render: (status) => (status === 2 ? 'Completed' : 'Pending'),
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      render: (text, record) => (
+        <Tag color="blue" onClick={() => downloadFile(record.file_id, record.filename)} style={{ cursor: 'pointer' }}>
+          Download
+        </Tag>
+      ),
     },
   ];
 
