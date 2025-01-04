@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Form, Upload, Button, Card, Typography, Input, message, Progress, Collapse, Tag } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useHistory } from 'react-router-dom';
+import SparkMD5 from 'spark-md5';
 import { apiFetch, config } from '../utils/apiFetch';
 
 const { Title } = Typography;
@@ -15,6 +16,36 @@ function UploadForm() {
   const [uploading, setUploading] = useState(false);
   const [chunkProgress, setChunkProgress] = useState({});
   const [selectedFile, setSelectedFile] = useState(null);
+
+  const calculateMD5 = (file) => {
+    return new Promise((resolve, reject) => {
+      const chunkSize = 2097152; // Read in chunks of 2MB
+      const spark = new SparkMD5.ArrayBuffer();
+      const fileReader = new FileReader();
+      let cursor = 0;
+
+      fileReader.onload = (e) => {
+        spark.append(e.target.result);
+        cursor += chunkSize;
+        if (cursor < file.size) {
+          readNextChunk();
+        } else {
+          resolve(spark.end());
+        }
+      };
+
+      fileReader.onerror = () => {
+        reject('MD5 calculation failed');
+      };
+
+      const readNextChunk = () => {
+        const slice = file.slice(cursor, cursor + chunkSize);
+        fileReader.readAsArrayBuffer(slice);
+      };
+
+      readNextChunk();
+    });
+  };
 
   const uploadChunk = async (file, chunk, fileId) => {
     try {
@@ -74,6 +105,8 @@ function UploadForm() {
       setUploadProgress(0);
       setChunkProgress({});
 
+      const md5Hash = await calculateMD5(file);
+
       const metaData = await apiFetch('/submit_metadata', {
         method: 'POST',
         headers: {
@@ -82,7 +115,8 @@ function UploadForm() {
         body: JSON.stringify({
           filename: formValues.filename || file.name,
           total_size: file.size,
-          description: formValues.description
+          description: formValues.description,
+          checksum: md5Hash,
         }),
       });
 
