@@ -15,6 +15,7 @@
     },
     "dialog:allow-open",
     "dialog:default",
-    "fs:allow-appdata-write"
+    "fs:allow-appdata-write",
+    "fs:allow-watch"
   ]
 }

@@ -15,12 +15,26 @@ import UploadForm from './pages/UploadForm';
 import SystemInit from './pages/SystemInit';
 import UploadedFiles from './pages/UploadedFiles';
 import './App.css';
+import { checkSysConf } from './pages/SystemInit'; // 假设checkSysConf在fileWatcher.js中
+import { startWatching } from './utils/fileWatcher';
 
 const { Header, Content, Sider } = Layout;
 
 function App() {
   const location = useLocation();
   const selectedKey = location.pathname;
+
+  const initializeWatcher = async () => {
+     try {
+       await checkSysConf();
+       console.log('Configuration file is valid.');
+       await startWatching();
+     } catch (error) {
+       console.error('Configuration file check failed:', error);
+     }
+   };
+
+   initializeWatcher();
 
   useEffect(() => {
     const unlisten = listen('file-changed', (event) => {

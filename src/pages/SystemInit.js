@@ -7,6 +7,7 @@ import {readTextFile,mkdir, exists, BaseDirectory,writeTextFile } from '@tauri-a
 import * as path from '@tauri-apps/api/path';
 import { platform } from '@tauri-apps/plugin-os';
 import { open } from '@tauri-apps/plugin-dialog';
+import { startWatching } from '../utils/fileWatcher';
 
 const { Title } = Typography;
 const { Step } = Steps;
@@ -29,25 +30,6 @@ const SystemInit = () => {
     checkSystemStatus();
   }, []);
 
-  const checkSysConf = async () => {
-    const sysConfExists = await exists(sysConfName, { baseDir: BaseDirectory.AppConfig });
-    const appConfigDir = await path.appConfigDir();
-      console.log("appConfigDir=", appConfigDir);
-    if (sysConfExists) {
-      const sysConfContent = await readTextFile(sysConfName, { baseDir: BaseDirectory.AppConfig });
-      try {
-        const sysConfJson = JSON.parse(sysConfContent);
-        if (!Array.isArray(sysConfJson.watchDir) || typeof sysConfJson.interval !== 'number') {
-          throw new Error('sys.conf file is missing required fields');
-        }
-        return true;
-      } catch (e) {
-        throw new Error('sys.conf file is not valid JSON');
-      }
-    } else {
-      throw new Error('sys.conf file is missing');
-    }
-  };
 
   const checkSystemStatus = async () => {
     try {
@@ -123,6 +105,7 @@ const SystemInit = () => {
         );
       }
       message.success('系统初始化成功！');
+      await startWatching();
       setIsInitialized(true);
     } catch (error) {
       message.error('初始化过程中出现错误：' + error.message);
@@ -148,9 +131,17 @@ const SystemInit = () => {
   };
 
   const handleSelectFolder = async (fieldKey) => {
+    const appDataDir = await path.appDataDir();
+    console.log("appDataDir=", appDataDir);
+    const appLocalDataDir = await path.appLocalDataDir();
+    console.log("appLocalDataDir=", appLocalDataDir);
     const folder = await open({
       multiple: false,
       directory: true,
+      filters: [
+        { name: appDataDir, extensions: ['*']},
+        { name: appLocalDataDir, extensions: ['*']},
+      ],
     });
     if (folder) {
       const currentWatchDir = form.getFieldValue('watchDir') || [];
@@ -326,5 +317,25 @@ const SystemInit = () => {
     </div>
   );
 };
+
+export const checkSysConf = async () => {
+    const sysConfExists = await exists(sysConfName, { baseDir: BaseDirectory.AppConfig });
+    const appConfigDir = await path.appConfigDir();
+      console.log("appConfigDir=", appConfigDir);
+    if (sysConfExists) {
+      const sysConfContent = await readTextFile(sysConfName, { baseDir: BaseDirectory.AppConfig });
+      try {
+        const sysConfJson = JSON.parse(sysConfContent);
+        if (!Array.isArray(sysConfJson.watchDir) || typeof sysConfJson.interval !== 'number') {
+          throw new Error('sys.conf file is missing required fields');
+        }
+        return true;
+      } catch (e) {
+        throw new Error('sys.conf file is not valid JSON');
+      }
+    } else {
+      throw new Error('sys.conf file is missing');
+    }
+  };
 
 export default SystemInit; 
