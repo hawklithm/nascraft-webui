@@ -3,6 +3,9 @@ import { useHistory } from 'react-router-dom';
 import { Card, Button, Steps, Typography, message, Result, Table } from 'antd';
 import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { apiFetch } from '../utils/apiFetch';
+import { exists, BaseDirectory } from '@tauri-apps/plugin-fs';
+import * as path from '@tauri-apps/api/path';
+import { platform } from '@tauri-apps/plugin-os';
 
 const { Title } = Typography;
 const { Step } = Steps;
@@ -15,7 +18,6 @@ const SystemInit = () => {
   const [initStatus, setInitStatus] = useState({
     database: false,
     config: false,
-    users: false
   });
   const [errorData, setErrorData] = useState([]);
 
@@ -25,18 +27,37 @@ const SystemInit = () => {
 
   const checkSystemStatus = async () => {
     try {
+      // Check table structure
       await apiFetch('/check_table_structure', {
         method: 'GET'
       });
-      
+      setInitStatus(prev => ({ ...prev, database: true }));
+      let platform_name = "unknown";
+      try{
+        platform_name = await platform();
+      }catch(e){
+        console.log("no in tauri");
+      }
+      console.log("platform=",platform_name);
+      // Check if running in Tauri
+      if (platform_name!=="unknown") {
+        // Check for sys.conf file
+        const sysConfExists = await exists('sys.conf', { baseDir: BaseDirectory.AppConfig });
+        if (sysConfExists) {
+          setInitStatus(prev => ({ ...prev, config: true }));
+        } else {
+          const appConfigDir = await path.appConfigDir();
+          console.log("appConfigDir=", appConfigDir);
+          throw new Error('sys.conf file is missing');
+        }
+      } else {
+        // If not running in Tauri, skip config file check
+        setInitStatus(prev => ({ ...prev, config: true }));
+      }
+
       setIsInitialized(true);
-      setInitStatus({
-        database: true,
-        config: true,
-        users: true
-      });
     } catch (error) {
-      message.error('检查系统状态失败：' + error.message);
+      message.error('检查系统状态失败：' + error);
       setErrorData(error.data || []);
     } finally {
       setChecking(false);
@@ -148,16 +169,10 @@ const SystemInit = () => {
             description="初始化系统数据库和表结构"
           />
           <Step 
-            title="系统配置"
+            title="配置文件检查"
             status={getStepStatus('config')}
             icon={getStepIcon('config')}
-            description="配置系统基本参数和运行环境"
-          />
-          <Step 
-            title="用户初始化"
-            status={getStepStatus('users')}
-            icon={getStepIcon('users')}
-            description="创建管理员账户和基本用户结构"
+            description="检查 sys.conf 配置文件"
           />
         </Steps>
 
