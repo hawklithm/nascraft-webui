@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { BrowserRouter, Route, Switch, Redirect, Link, useLocation } from 'react-router-dom';
 import { Layout, Menu } from 'antd';
 import {
@@ -20,6 +21,17 @@ const { Header, Content, Sider } = Layout;
 function App() {
   const location = useLocation();
   const selectedKey = location.pathname;
+
+  useEffect(() => {
+    const unlisten = listen('file-changed', (event) => {
+      console.log('File changed:', event.payload);
+      // Handle the file change event
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>

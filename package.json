@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/cli": "^2.2.2",
     "antd": "^5.22.7",
     "axios": "^1.7.9",
