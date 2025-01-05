@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useHistory } from 'react-router-dom';
-import { Card, Button, Steps, Typography, message, Result, Table, Form, Input, InputNumber } from 'antd';
+import { Card, Button, Steps, Typography, message, Result, Table, Form, Input,  Select } from 'antd';
 import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { apiFetch } from '../utils/apiFetch';
-import {readTextFile, exists, BaseDirectory } from '@tauri-apps/plugin-fs';
+import {readTextFile,mkdir, exists, BaseDirectory,writeTextFile } from '@tauri-apps/plugin-fs';
 import * as path from '@tauri-apps/api/path';
 import { platform } from '@tauri-apps/plugin-os';
-import { writeFile } from '@tauri-apps/plugin-fs';
 import { open } from '@tauri-apps/plugin-dialog';
 
 const { Title } = Typography;
@@ -96,21 +95,38 @@ const SystemInit = () => {
         await checkSysConf();
       } catch (error) {
         // 如果 sys.conf 文件不存在或不符合要求，则创建文件
-        const defaultConfig = {
-          watchDir: [],
-          interval: 60
+        const values = form.getFieldsValue();
+        if (values.interval === undefined) {
+          message.error('请选择检查间隔时间');
+          return;
+        }
+        if (values.watchDir ===undefined || values.watchDir.length === 0) {
+          values.watchDir = [];
+          console.log("values.watchDir setting missing");
+        }
+        const newConfig = {
+          watchDir: values.watchDir,
+          interval: values.interval
         };
-        await writeFile(
+        const dir_exists = await exists('', {
+          baseDir: BaseDirectory.AppConfig,
+        });
+        if (!dir_exists) {
+          await mkdir('', {
+            baseDir: BaseDirectory.AppConfig,
+          });
+        }
+        await writeTextFile(
           sysConfName,
-           JSON.stringify(defaultConfig, null, 2),
+           JSON.stringify(newConfig, null, 2),
            { baseDir: BaseDirectory.AppConfig }
         );
       }
       message.success('系统初始化成功！');
       setIsInitialized(true);
-      history.push('/welcome');
     } catch (error) {
       message.error('初始化过程中出现错误：' + error.message);
+      console.log(error)
     } finally {
       setLoading(false);
     }
@@ -121,7 +137,7 @@ const SystemInit = () => {
       watchDir: values.watchDir,
       interval: values.interval
     };
-    await writeFile(
+    await writeTextFile(
       sysConfName,
       JSON.stringify(newConfig, null, 2),
       { baseDir: BaseDirectory.AppConfig }
@@ -180,9 +196,8 @@ const SystemInit = () => {
         return (
           <Card>
             <Title level={4}>配置文件检查</Title>
-            <p>检查 sys.conf 配置文件。</p>
             {showConfigForm && (
-              <Form form={form} onFinish={handleFormSubmit} layout="vertical">
+              <Form form={form} layout="vertical">
                 <Form.List name="watchDir">
                   {(fields, { add, remove }) => (
                     <div>
@@ -190,7 +205,7 @@ const SystemInit = () => {
                         <Form.Item
                           {...restField}
                           name={[name]}
-                          fieldKey={[fieldKey]}
+                          label={`配置需要同步的文件夹路径`}
                           rules={[{ required: true, message: '请选择文件夹路径' }]}
                         >
                           <Input
@@ -209,13 +224,14 @@ const SystemInit = () => {
                 </Form.List>
                 <Form.Item
                   name="interval"
-                  label="检查间隔时间（秒）"
-                  rules={[{ required: true, message: '请输入检查间隔时间' }]}
+                  label="检查间隔时间"
+                  rules={[{ required: true, message: '请选择检查间隔时间' }]}
                 >
-                  <InputNumber min={1} style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.Item>
-                  <Button type="primary" htmlType="submit">提交</Button>
+                  <Select style={{ width: '100%' }}>
+                    <Select.Option value={1}>高性能（1秒）</Select.Option>
+                    <Select.Option value={60}>平衡（60秒）</Select.Option>
+                    <Select.Option value={300}>节能（300秒）</Select.Option>
+                  </Select>
                 </Form.Item>
               </Form>
             )}

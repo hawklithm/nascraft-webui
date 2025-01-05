@@ -12,6 +12,9 @@
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "$APPCONFIG/**" },{"path":"$APPDATA/**"},{"path":"$APPLOG/**"},{"path":"$APPCACHE/**"}]
-    }
+    },
+    "dialog:allow-open",
+    "dialog:default",
+    "fs:allow-appdata-write"
   ]
 }
