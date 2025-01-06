@@ -125,6 +125,7 @@ const updateWatchDirs = async () => {
     newWatchDirs.forEach(async (dir) => {
       if (!currentWatchDirs.has(dir) && dir) {
         currentWatchDirs.add(dir);
+        console.log("add watch dir =", dir);
         await watch(
           dir,
           async (event) => {
@@ -158,6 +159,7 @@ const updateWatchDirs = async () => {
 export const startWatching = async () => {
   if (isWatching) return; // 如果已经在监听，则直接返回
   isWatching = true; // 设置标志为true，表示已经开始监听
+  console.log('startWatching...');
 
   await updateWatchDirs();
 

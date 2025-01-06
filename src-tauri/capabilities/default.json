@@ -16,6 +16,10 @@
     "dialog:allow-open",
     "dialog:default",
     "fs:allow-appdata-write",
-    "fs:allow-watch"
+    {
+      "identifier": "fs:allow-watch",
+      "allow": [{ "path": "$AUDIO/**" },{"path":"$APPDATA/**"},{"path":"$DOCUMENT/**"},{"path":"$DOWNLOAD/**"},{"path":"$PICTURE/**"},{"path":"$VIDEO/**"}]
+    },
+    "fs:allow-unwatch"
   ]
 }

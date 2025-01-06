@@ -8,6 +8,8 @@ import * as path from '@tauri-apps/api/path';
 import { platform } from '@tauri-apps/plugin-os';
 import { open } from '@tauri-apps/plugin-dialog';
 import { startWatching } from '../utils/fileWatcher';
+import { audioDir, appDataDir, documentDir, downloadDir, pictureDir, videoDir } from '@tauri-apps/api/path';
+import { sep } from '@tauri-apps/api/path';
 
 const { Title } = Typography;
 const { Step } = Steps;
@@ -25,11 +27,26 @@ const SystemInit = () => {
   const [errorData, setErrorData] = useState([]);
   const [form] = Form.useForm();
   const [showConfigForm, setShowConfigForm] = useState(false);
+  const [pathOptions, setPathOptions] = useState([]);
 
   useEffect(() => {
     checkSystemStatus();
   }, []);
 
+  useEffect(() => {
+    const fetchPaths = async () => {
+      const paths = await Promise.all([
+        { name: '音频目录', path: await audioDir() },
+        { name: '应用数据目录', path: await appDataDir() },
+        { name: '文档目录', path: await documentDir() },
+        { name: '下载目录', path: await downloadDir() },
+        { name: '图片目录', path: await pictureDir() },
+        { name: '视频目录', path: await videoDir() },
+      ]);
+      setPathOptions(paths);
+    };
+    fetchPaths();
+  }, []);
 
   const checkSystemStatus = async () => {
     try {
@@ -82,12 +99,18 @@ const SystemInit = () => {
           message.error('请选择检查间隔时间');
           return;
         }
-        if (values.watchDir ===undefined || values.watchDir.length === 0) {
+        if (values.watchDir === undefined || values.watchDir.length === 0) {
           values.watchDir = [];
           console.log("values.watchDir setting missing");
         }
+        // 处理 watchDir，将 select 和 input 组合成完整路径
+        const processedWatchDir = values.watchDir.map(dir => {
+          const select = dir.select || '';
+          const input = dir.input || '';
+          return `${select}${sep()}${input}`;
+        });
         const newConfig = {
-          watchDir: values.watchDir,
+          watchDir: processedWatchDir,
           interval: values.interval
         };
         const dir_exists = await exists('', {
@@ -199,13 +222,7 @@ const SystemInit = () => {
                           label={`配置需要同步的文件夹路径`}
                           rules={[{ required: true, message: '请选择文件夹路径' }]}
                         >
-                          <Input
-                            placeholder="文件夹路径"
-                            style={{ width: '80%', marginRight: 8 }}
-                            value={form.getFieldValue(['watchDir', fieldKey])}
-                            readOnly
-                          />
-                          <Button type="dashed" onClick={() => handleSelectFolder(fieldKey)}>选择文件夹</Button>
+                          <FolderPathInput fieldKey={fieldKey} form={form} options={pathOptions} />
                           <Button type="dashed" onClick={() => remove(name)}>删除</Button>
                         </Form.Item>
                       ))}
@@ -337,5 +354,79 @@ export const checkSysConf = async () => {
       throw new Error('sys.conf file is missing');
     }
   };
+
+const FolderPathInput = ({ fieldKey, form, options }) => {
+  const [combinedPath, setCombinedPath] = useState('');
+
+  const handleSelectChange = (value) => {
+    const currentInput = form.getFieldValue(['watchDir', fieldKey, 'input']) || '';
+    const combined = `${value}${sep()}${currentInput}`;
+    form.setFieldsValue({
+      watchDir: {
+        [fieldKey]: {
+          select: value,
+          input: currentInput,
+        },
+      },
+    });
+    setCombinedPath(combined);
+  };
+
+  const handleInputChange = (e) => {
+    const currentSelect = form.getFieldValue(['watchDir', fieldKey, 'select']) || options.find(option => option.name === '文档目录')?.path;
+    const combined = `${currentSelect}${sep()}${e.target.value}`;
+    form.setFieldsValue({
+      watchDir: {
+        [fieldKey]: {
+          select: currentSelect,
+          input: e.target.value,
+        },
+      },
+    });
+    setCombinedPath(combined);
+  };
+
+  useEffect(() => {
+    const defaultOption = options.find(option => option.name === '文档目录');
+    if (defaultOption) {
+      const currentInput = form.getFieldValue(['watchDir', fieldKey, 'input']) || '';
+      const combined = `${defaultOption.path}${sep()}${currentInput}`;
+      form.setFieldsValue({
+        watchDir: {
+          [fieldKey]: {
+            select: defaultOption.path,
+            input: currentInput,
+          },
+        },
+      });
+      setCombinedPath(combined);
+    }
+  }, [options, fieldKey, form]);
+
+  return (
+    <div>
+      <Input.Group compact>
+        <Select
+          style={{ width: '30%' }}
+          onChange={handleSelectChange}
+          placeholder="选择路径"
+          defaultValue={options.find(option => option.name === '文档目录')?.path}
+        >
+          {options.map((option, index) => (
+            <Select.Option key={option.name} value={option.path}>{option.name}</Select.Option>
+          ))}
+        </Select>
+        <Input
+          style={{ width: '70%' }}
+          placeholder="输入路径"
+          onChange={handleInputChange}
+        />
+      </Input.Group>
+      <div style={{ marginTop: 8 }}>
+        <Typography.Text type="secondary">完整路径: {combinedPath}</Typography.Text>
+      </div>
+    </div>
+  );
+};
 
 export default SystemInit; 
