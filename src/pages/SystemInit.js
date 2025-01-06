@@ -36,12 +36,12 @@ const SystemInit = () => {
   useEffect(() => {
     const fetchPaths = async () => {
       const paths = await Promise.all([
-        { name: '音频目录', path: await audioDir() },
-        { name: '应用数据目录', path: await appDataDir() },
-        { name: '文档目录', path: await documentDir() },
-        { name: '下载目录', path: await downloadDir() },
-        { name: '图片目录', path: await pictureDir() },
-        { name: '视频目录', path: await videoDir() },
+        { name: '音频目录', path: await audioDir(),baseDir:BaseDirectory.Audio },
+        { name: '应用数据目录', path: await appDataDir(),baseDir:BaseDirectory.AppData },
+        { name: '文档目录', path: await documentDir(),baseDir:BaseDirectory.Document },
+        { name: '下载目录', path: await downloadDir(),baseDir:BaseDirectory.Download },
+        { name: '图片目录', path: await pictureDir(),baseDir:BaseDirectory.Picture },
+        { name: '视频目录', path: await videoDir(),baseDir:BaseDirectory.Video },
       ]);
       setPathOptions(paths);
     };
@@ -104,11 +104,18 @@ const SystemInit = () => {
           console.log("values.watchDir setting missing");
         }
         // 处理 watchDir，将 select 和 input 组合成完整路径
-        const processedWatchDir = values.watchDir.map(dir => {
+        const processedWatchDir = await Promise.all(values.watchDir.map(async dir => {
           const select = dir.select || '';
           const input = dir.input || '';
-          return `${select}${sep()}${input}`;
-        });
+          const baseDir = dir.baseDir || '';
+          const fullPath = `${select}${sep()}${input}`;
+          console.log("create dir=",fullPath,",baseDir=",baseDir);
+          const dirExists = await exists(input, { baseDir: baseDir });
+          if (!dirExists) {
+            await mkdir(input, { baseDir: baseDir, recursive: true });
+          }
+          return fullPath;
+        }));
         const newConfig = {
           watchDir: processedWatchDir,
           interval: values.interval
@@ -366,6 +373,7 @@ const FolderPathInput = ({ fieldKey, form, options }) => {
         [fieldKey]: {
           select: value,
           input: currentInput,
+          baseDir:options.find(option => option.path === value)?.baseDir
         },
       },
     });
@@ -380,6 +388,7 @@ const FolderPathInput = ({ fieldKey, form, options }) => {
         [fieldKey]: {
           select: currentSelect,
           input: e.target.value,
+          baseDir:options.find(option => option.path === currentSelect)?.baseDir
         },
       },
     });
@@ -396,6 +405,7 @@ const FolderPathInput = ({ fieldKey, form, options }) => {
           [fieldKey]: {
             select: defaultOption.path,
             input: currentInput,
+            baseDir:defaultOption.baseDir
           },
         },
       });

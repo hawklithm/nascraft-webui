@@ -11,7 +11,7 @@
     "fs:default",
     {
       "identifier": "fs:scope",
-      "allow": [{ "path": "$APPCONFIG/**" },{"path":"$APPDATA/**"},{"path":"$APPLOG/**"},{"path":"$APPCACHE/**"}]
+      "allow": [{ "path": "$APPCONFIG/**" },{"path":"$APPDATA/**"},{"path":"$APPLOG/**"},{"path":"$APPCACHE/**"},{ "path": "$AUDIO/**" },{"path":"$APPDATA/**"},{"path":"$DOCUMENT/**"},{"path":"$DOWNLOAD/**"},{"path":"$PICTURE/**"},{"path":"$VIDEO/**"}]
     },
     "dialog:allow-open",
     "dialog:default",
