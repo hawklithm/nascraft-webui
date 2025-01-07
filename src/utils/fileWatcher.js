@@ -58,7 +58,6 @@ const uploadChunk = async (file, chunk, fileId) => {
       xhr.open('POST', `${config.apiBaseUrl}/upload`);
       xhr.setRequestHeader('X-File-ID', fileId);
       xhr.setRequestHeader('X-Start-Offset', chunk.start_offset);
-      xhr.setRequestHeader('Content-Length', chunk.chunk_size);
       xhr.setRequestHeader('Content-Range', `bytes ${chunk.start_offset}-${chunk.end_offset}/${file.size}`);
 
       xhr.send(file.slice(chunk.start_offset, chunk.end_offset + 1));
@@ -134,7 +133,7 @@ const handleFileUpload = async (filePath) => {
       }),
     });
 
-    const { chunks, total_chunks } = metaData;
+    const { chunks  } = metaData;
 
     const uploadChunks = async (chunksToUpload) => {
       const chunkPromises = chunksToUpload.map(chunk => 

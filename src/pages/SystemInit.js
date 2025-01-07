@@ -53,7 +53,7 @@ const SystemInit = () => {
       // Check table structure
       await apiFetch('/check_table_structure', {
         method: 'GET'
-      });
+      },false);
       setInitStatus(prev => ({ ...prev, database: true }));
       let platform_name = "unknown";
       try{
@@ -74,8 +74,8 @@ const SystemInit = () => {
 
       setIsInitialized(true);
     } catch (error) {
-      message.error('检查系统状态失败：' + error);
-      setErrorData(error.data || []);
+      console.log('检查系统状态失败：' + error);
+      setErrorData([error.message]);
       setShowConfigForm(true);
     } finally {
       setChecking(false);
@@ -211,6 +211,14 @@ const SystemInit = () => {
           <Card>
             <Title level={4}>数据库初始化</Title>
             <p>初始化系统数据库和表结构。</p>
+            {errorData.length > 0 && (
+              <Table
+                dataSource={errorData.map((error, index) => ({ key: index, error }))}
+                columns={columns}
+                pagination={false}
+                style={{ marginTop: 16, backgroundColor: '#fff5f5', border: '1px solid #ffccc7' }}
+              />
+            )}
           </Card>
         );
       case 1:
@@ -299,14 +307,6 @@ const SystemInit = () => {
         系统初始化
       </Title>
 
-      {errorData.length > 0 && (
-        <Table
-          dataSource={errorData.map((error, index) => ({ key: index, error }))}
-          columns={columns}
-          pagination={false}
-          style={{ marginBottom: 20, backgroundColor: '#fff5f5', border: '1px solid #ffccc7' }}
-        />
-      )}
 
       <Steps
         direction="vertical"
