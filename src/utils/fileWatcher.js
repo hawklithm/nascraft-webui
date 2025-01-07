@@ -10,6 +10,21 @@ const sysConfName = 'sys.conf';
 let currentWatchDirs = new Set();
 let isWatching = false;
 
+// 添加上传进度管理
+let uploadProgressMap = new Map();
+let uploadProgressCallback = null;
+
+export const setUploadProgressCallback = (callback) => {
+  uploadProgressCallback = callback;
+};
+
+const updateUploadProgress = (filePath, progress, status = 'uploading') => {
+  uploadProgressMap.set(filePath, { progress, status, timestamp: Date.now() });
+  if (uploadProgressCallback) {
+    uploadProgressCallback(Array.from(uploadProgressMap.entries()));
+  }
+};
+
 const calculateMD5 = (file) => {
   return new Promise((resolve, reject) => {
     const chunkSize = 2097152; // Read in chunks of 2MB
@@ -89,6 +104,7 @@ const initPathMap = async () => {
 
 const handleFileUpload = async (filePath) => {
   try {
+    updateUploadProgress(filePath, 0, 'uploading');
     if (pathMap.size === 0) {
       await initPathMap();
     }
@@ -134,10 +150,19 @@ const handleFileUpload = async (filePath) => {
     });
 
     const { chunks  } = metaData;
+    let completedChunks = 0;
+    const totalChunks = chunks.length;
 
     const uploadChunks = async (chunksToUpload) => {
       const chunkPromises = chunksToUpload.map(chunk => 
-        uploadChunk(file, chunk, metaData.id)
+        uploadChunk(file, chunk, metaData.id).then(success => {
+          if (success) {
+            completedChunks++;
+            const progress = Math.round((completedChunks / totalChunks) * 100);
+            updateUploadProgress(filePath, progress);
+          }
+          return success;
+        })
       );
 
       return Promise.all(chunkPromises);
@@ -153,8 +178,10 @@ const handleFileUpload = async (filePath) => {
     }
 
     console.log('文件上传成功');
+    updateUploadProgress(filePath, 100, 'success');
   } catch (error) {
     console.error('Upload failed:', error);
+    updateUploadProgress(filePath, 0, 'error');
   }
 };
 

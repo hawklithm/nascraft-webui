@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useHistory } from 'react-router-dom';
-import { Card, Button, Steps, Typography, message, Result, Table, Form, Input,  Select } from 'antd';
-import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { Card, Button, Steps, Typography, message, Result, Table, Form, Input,  Select, FloatButton, Drawer, List, Progress, Badge } from 'antd';
+import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined, ExclamationCircleOutlined, CloudUploadOutlined } from '@ant-design/icons';
 import { apiFetch } from '../utils/apiFetch';
 import {readTextFile,mkdir, exists, BaseDirectory,writeTextFile } from '@tauri-apps/plugin-fs';
 import * as path from '@tauri-apps/api/path';
@@ -10,6 +10,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { startWatching } from '../utils/fileWatcher';
 import { audioDir, appDataDir, documentDir, downloadDir, pictureDir, videoDir } from '@tauri-apps/api/path';
 import { sep } from '@tauri-apps/api/path';
+import { setUploadProgressCallback } from '../utils/fileWatcher';
 
 const { Title } = Typography;
 const { Step } = Steps;
@@ -28,6 +29,8 @@ const SystemInit = () => {
   const [form] = Form.useForm();
   const [showConfigForm, setShowConfigForm] = useState(false);
   const [pathOptions, setPathOptions] = useState([]);
+  const [showUploadProgress, setShowUploadProgress] = useState(false);
+  const [uploadList, setUploadList] = useState([]);
 
   useEffect(() => {
     checkSystemStatus();
@@ -46,6 +49,12 @@ const SystemInit = () => {
       setPathOptions(paths);
     };
     fetchPaths();
+  }, []);
+
+  useEffect(() => {
+    setUploadProgressCallback((progressList) => {
+      setUploadList(progressList);
+    });
   }, []);
 
   const checkSystemStatus = async () => {
@@ -265,6 +274,19 @@ const SystemInit = () => {
     }
   };
 
+  const renderUploadStatus = (status) => {
+    switch (status) {
+      case 'uploading':
+        return <Badge status="processing" text="上传中" />;
+      case 'success':
+        return <Badge status="success" text="已完成" />;
+      case 'error':
+        return <Badge status="error" text="失败" />;
+      default:
+        return null;
+    }
+  };
+
   if (checking) {
     return (
       <div style={{ maxWidth: 800, margin: '50px auto', padding: '0 20px' }}>
@@ -338,6 +360,39 @@ const SystemInit = () => {
           {loading ? '初始化中...' : '开始初始化'}
         </Button>
       </div>
+
+      <FloatButton
+        icon={<CloudUploadOutlined />}
+        type="primary"
+        style={{ right: 24, bottom: 24 }}
+        onClick={() => setShowUploadProgress(true)}
+        badge={{ count: uploadList.filter(([_, { status }]) => status === 'uploading').length }}
+      />
+
+      <Drawer
+        title="文件上传进度"
+        placement="right"
+        onClose={() => setShowUploadProgress(false)}
+        open={showUploadProgress}
+        width={400}
+      >
+        <List
+          dataSource={uploadList}
+          renderItem={([filePath, { progress, status }]) => (
+            <List.Item>
+              <div style={{ width: '100%' }}>
+                <div style={{ marginBottom: 8 }}>
+                  <Typography.Text ellipsis style={{ maxWidth: '80%' }}>
+                    {filePath.split('/').pop()}
+                  </Typography.Text>
+                  {renderUploadStatus(status)}
+                </div>
+                <Progress percent={progress} status={status === 'error' ? 'exception' : undefined} />
+              </div>
+            </List.Item>
+          )}
+        />
+      </Drawer>
     </div>
   );
 };
