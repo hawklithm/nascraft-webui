@@ -1,7 +1,9 @@
-import { watch, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { readFile,watch, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { apiFetch, config } from './apiFetch';
 import SparkMD5 from 'spark-md5';
+import { audioDir, appDataDir, documentDir, downloadDir, pictureDir, videoDir } from '@tauri-apps/api/path';
+import { sep } from '@tauri-apps/api/path';
 
 const sysConfName = 'sys.conf';
 
@@ -69,19 +71,63 @@ const uploadChunk = async (file, chunk, fileId) => {
   }
 };
 
+const pathMap = new Map();
+
+const initPathMap = async () => {
+  const paths = [
+    { path: await audioDir(), baseDir: BaseDirectory.Audio },
+    { path: await appDataDir(), baseDir: BaseDirectory.AppData },
+    { path: await documentDir(), baseDir: BaseDirectory.Document },
+    { path: await downloadDir(), baseDir: BaseDirectory.Download },
+    { path: await pictureDir(), baseDir: BaseDirectory.Picture },
+    { path: await videoDir(), baseDir: BaseDirectory.Video },
+  ];
+  
+  paths.forEach(({ path, baseDir }) => {
+    pathMap.set(path, baseDir);
+  });
+};
+
 const handleFileUpload = async (filePath) => {
   try {
-    const file = await fetch(filePath).then(res => res.blob());
-    console.log("file=", file);
+    if (pathMap.size === 0) {
+      await initPathMap();
+    }
+
+    let targetPath = '';
+    let targetBaseDir = null;
+
+    // 查找匹配的前缀路径
+    for (const [path, baseDir] of pathMap.entries()) {
+      if (filePath.startsWith(path)) {
+        targetPath = filePath.substring(path.length + 1); // +1 是为了去掉路径分隔符
+        targetBaseDir = baseDir;
+        break;
+      }
+    }
+
+    if (!targetBaseDir) {
+      throw new Error('无法找到匹配的目录');
+    }
+
+    // 读取文件内容
+    const fileContent = await readFile(targetPath, { baseDir: targetBaseDir });
+    if (fileContent.length === 0) {
+      console.log("fileContent is empty,skip");
+      return;
+    }
+    const file = new Blob([fileContent]);
+    
     const md5Hash = await calculateMD5(file);
     console.log("md5Hash=", md5Hash);
+
     const metaData = await apiFetch('/submit_metadata', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        filename: file.name,
+        filename: targetPath.split(sep()).pop(),
         total_size: file.size,
         description: '',
         checksum: md5Hash,
@@ -129,9 +175,12 @@ const updateWatchDirs = async () => {
         await watch(
           dir,
           async (event) => {
-            if (event.kind === 'create') {
-              console.log('New file detected:', event.path);
-              await handleFileUpload(event.path);
+            console.log('change detected:', event);
+            if (event.type.create !== undefined) {
+              console.log('New file detected:', event.paths);
+              for (const path of event.paths) {
+                  await handleFileUpload(path);
+              }
             }
           },
           {
