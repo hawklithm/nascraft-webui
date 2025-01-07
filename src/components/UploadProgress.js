@@ -2,16 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { FloatButton, Drawer, List, Progress, Badge, Typography } from 'antd';
 import { CloudUploadOutlined } from '@ant-design/icons';
 import { setUploadProgressCallback } from '../utils/fileWatcher';
+import { sep } from '@tauri-apps/api/path';
 
 const UploadProgress = () => {
   const [showUploadProgress, setShowUploadProgress] = useState(false);
   const [uploadList, setUploadList] = useState([]);
 
   useEffect(() => {
-    setUploadProgressCallback((progressList) => {
-      setUploadList(progressList);
-    });
+    const callback = (progressList) => {
+      setUploadList([...progressList]);
+    };
+    setUploadProgressCallback(callback);
+    return () => setUploadProgressCallback(null);
   }, []);
+
+  const getFileName = (filePath) => {
+    const parts = filePath.split(sep());
+    return parts[parts.length - 1];
+  };
 
   const renderUploadStatus = (status) => {
     switch (status) {
@@ -48,9 +56,9 @@ const UploadProgress = () => {
           renderItem={([filePath, { progress, status }]) => (
             <List.Item>
               <div style={{ width: '100%' }}>
-                <div style={{ marginBottom: 8 }}>
-                  <Typography.Text ellipsis style={{ maxWidth: '80%' }}>
-                    {filePath.split('/').pop()}
+                <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography.Text ellipsis style={{ maxWidth: '70%' }}>
+                    {getFileName(filePath)}
                   </Typography.Text>
                   {renderUploadStatus(status)}
                 </div>

@@ -4,6 +4,7 @@ import { UploadOutlined } from '@ant-design/icons';
 import { useHistory } from 'react-router-dom';
 import SparkMD5 from 'spark-md5';
 import { apiFetch, config } from '../utils/apiFetch';
+import withSystemCheck from '../components/withSystemCheck';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -215,4 +216,4 @@ function UploadForm() {
   );
 }
 
-export default UploadForm; 
+export default withSystemCheck(UploadForm); 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Card, Typography, message, Tag } from 'antd';
 import { apiFetch } from '../utils/apiFetch';
+import withSystemCheck from '../components/withSystemCheck';
 
 const { Title } = Typography;
 
@@ -114,4 +115,4 @@ function UploadedFiles() {
   );
 }
 
-export default UploadedFiles; 
+export default withSystemCheck(UploadedFiles); 

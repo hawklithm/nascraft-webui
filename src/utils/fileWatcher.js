@@ -104,7 +104,6 @@ const initPathMap = async () => {
 
 const handleFileUpload = async (filePath) => {
   try {
-    updateUploadProgress(filePath, 0, 'uploading');
     if (pathMap.size === 0) {
       await initPathMap();
     }
@@ -125,10 +124,14 @@ const handleFileUpload = async (filePath) => {
       throw new Error('无法找到匹配的目录');
     }
 
+    // 更新初始状态
+    updateUploadProgress(filePath, 0, 'uploading');
+
     // 读取文件内容
     const fileContent = await readFile(targetPath, { baseDir: targetBaseDir });
     if (fileContent.length === 0) {
       console.log("fileContent is empty,skip");
+      updateUploadProgress(filePath, 0, 'error');
       return;
     }
     const file = new Blob([fileContent]);
@@ -149,20 +152,21 @@ const handleFileUpload = async (filePath) => {
       }),
     });
 
-    const { chunks  } = metaData;
+    const { chunks } = metaData;
     let completedChunks = 0;
     const totalChunks = chunks.length;
 
     const uploadChunks = async (chunksToUpload) => {
       const chunkPromises = chunksToUpload.map(chunk => 
-        uploadChunk(file, chunk, metaData.id).then(success => {
-          if (success) {
-            completedChunks++;
-            const progress = Math.round((completedChunks / totalChunks) * 100);
-            updateUploadProgress(filePath, progress);
-          }
-          return success;
-        })
+        uploadChunk(file, chunk, metaData.id)
+          .then(success => {
+            if (success) {
+              completedChunks++;
+              const progress = Math.round((completedChunks / totalChunks) * 100);
+              updateUploadProgress(filePath, progress, 'uploading');
+            }
+            return success;
+          })
       );
 
       return Promise.all(chunkPromises);
@@ -173,6 +177,7 @@ const handleFileUpload = async (filePath) => {
       const results = await uploadChunks(chunksGroup);
       
       if (results.includes(false)) {
+        updateUploadProgress(filePath, 0, 'error');
         throw new Error('部分分片上传失败');
       }
     }
