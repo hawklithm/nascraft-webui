@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table, Card, Typography, message, Tag } from 'antd';
 import { apiFetch } from '../utils/apiFetch';
 import withSystemCheck from '../components/withSystemCheck';
+import dayjs from 'dayjs';
 
 const { Title } = Typography;
 
@@ -10,17 +11,22 @@ function UploadedFiles() {
   const [loading, setLoading] = useState(true);
   const [totalFiles, setTotalFiles] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortConfig, setSortConfig] = useState({
+    sortBy: 'date',
+    order: 'desc'
+  });
   const pageSize = 10;
 
   useEffect(() => {
-    fetchUploadedFiles(currentPage, pageSize);
-  }, [currentPage]);
+    fetchUploadedFiles(currentPage, pageSize, sortConfig.sortBy, sortConfig.order);
+  }, [currentPage, sortConfig]);
 
-  const fetchUploadedFiles = async (page, pageSize) => {
+  const fetchUploadedFiles = async (page, pageSize, sortBy, order) => {
     try {
-      const data = await apiFetch(`/uploaded_files?page=${page}&page_size=${pageSize}&status=2&sort_by=size&order=des`, {
-        method: 'GET',
-      });
+      const data = await apiFetch(
+        `/uploaded_files?page=${page}&page_size=${pageSize}&status=2&sort_by=${sortBy}&order=${order}`,
+        { method: 'GET' }
+      );
 
       setFiles(data.files);
       setTotalFiles(data.total_files);
@@ -30,6 +36,28 @@ function UploadedFiles() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTableChange = (pagination, filters, sorter) => {
+    let sortBy = 'date';
+    let order = 'desc';
+
+    if (sorter.field === 'total_size') {
+      sortBy = 'size';
+    } else if (sorter.field === 'file_id') {
+      sortBy = 'id';
+    } else if (sorter.field === 'last_updated') {
+      sortBy = 'date';
+    }
+
+    if (sorter.order === 'ascend') {
+      order = 'asc';
+    } else if (sorter.order === 'descend') {
+      order = 'desc';
+    }
+
+    setSortConfig({ sortBy, order });
+    setCurrentPage(pagination.current);
   };
 
   const downloadFile = async (fileId, filename) => {
@@ -59,38 +87,50 @@ function UploadedFiles() {
 
   const columns = [
     {
-      title: 'File ID',
+      title: '文件ID',
       dataIndex: 'file_id',
       key: 'file_id',
+      sorter: true,
+      sortOrder: sortConfig.sortBy === 'id' && `${sortConfig.order}end`,
     },
     {
-      title: 'Filename',
+      title: '文件名',
       dataIndex: 'filename',
       key: 'filename',
     },
     {
-      title: 'Total Size (MB)',
+      title: '文件大小 (MB)',
       dataIndex: 'total_size',
       key: 'total_size',
       render: (size) => (size / (1024 * 1024)).toFixed(2),
+      sorter: true,
+      sortOrder: sortConfig.sortBy === 'size' && `${sortConfig.order}end`,
     },
     {
-      title: 'Checksum',
+      title: '校验和',
       dataIndex: 'checksum',
       key: 'checksum',
     },
     {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => (status === 2 ? 'Completed' : 'Pending'),
+      title: '上传时间',
+      dataIndex: 'last_updated',
+      key: 'last_updated',
+      render: (timestamp) => dayjs(timestamp * 1000).format('YYYY-MM-DD HH:mm:ss'),
+      sorter: true,
+      sortOrder: sortConfig.sortBy === 'date' && `${sortConfig.order}end`,
     },
     {
-      title: 'Action',
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => (status === 2 ? '已完成' : '处理中'),
+    },
+    {
+      title: '操作',
       key: 'action',
       render: (text, record) => (
         <Tag color="blue" onClick={() => downloadFile(record.file_id, record.filename)} style={{ cursor: 'pointer' }}>
-          Download
+          下载
         </Tag>
       ),
     },
@@ -98,17 +138,18 @@ function UploadedFiles() {
 
   return (
     <Card>
-      <Title level={2}>Uploaded Files</Title>
+      <Title level={2}>已上传文件</Title>
       <Table
         columns={columns}
         dataSource={files}
         rowKey="file_id"
         loading={loading}
+        onChange={handleTableChange}
         pagination={{
           current: currentPage,
           pageSize: pageSize,
           total: totalFiles,
-          onChange: (page) => setCurrentPage(page),
+          showSizeChanger: false,
         }}
       />
     </Card>
