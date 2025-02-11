@@ -2,76 +2,104 @@
 
 The repository of the corresponding backend project is [here](https://github.com/hawklithm/nascraft).
 
-This project is the frontend for the NASCraft Management System, built with React and Ant Design. It provides a user-friendly interface for managing file uploads, system initialization, and viewing uploaded files.
+This project is the frontend for the NASCraft Management System, built with React, Ant Design, and Tauri. It provides a user-friendly interface for managing file uploads, system initialization, and viewing uploaded files.
 
 ## Features
 
-- **File Upload**: Upload files with progress tracking and chunked uploads.
-- **System Initialization**: Initialize system settings and configurations.
-- **View Uploaded Files**: Browse and manage uploaded files.
-- **Internationalization**: Supports multiple languages with easy switching.
-- **Responsive Design**: Optimized for various screen sizes.
+- **System Initialization**: Initialize system settings and database structure
+- **File Upload**: Support large file uploads with chunk-based uploading and progress tracking
+- **File Monitoring**: Monitor specified directories for file changes and auto-upload
+- **File Management**: Browse and manage uploaded files with sorting and filtering
+- **Progress Tracking**: Real-time upload progress monitoring with a floating window
+- **Responsive Design**: Optimized for various screen sizes with collapsible navigation
 
 ## Technologies Used
 
-- **React**: A JavaScript library for building user interfaces.
-- **Ant Design**: A UI framework for creating elegant and responsive designs.
-- **React Router**: For handling navigation and routing.
-- **@ant-design/colors**: For consistent color theming.
-- **Fetch API**: For making HTTP requests to the backend.
+- **React**: Frontend framework for building the user interface
+- **Ant Design**: UI component library for elegant and responsive designs
+- **Tauri**: Framework for building lightweight desktop applications
+- **React Router**: For handling navigation and routing
+- **dayjs**: For date formatting and manipulation
+- **SparkMD5**: For file checksum calculation
 
-## Getting Started
+## Prerequisites
 
-### Prerequisites
+- Node.js (v14 or higher)
+- Rust (latest stable version)
+- Tauri CLI
+- System-specific dependencies for Tauri development:
+  - Windows: Microsoft Visual Studio C++ Build Tools
+  - macOS: Xcode Command Line Tools
+  - Linux: Required development packages (varies by distribution)
 
-- Node.js and npm installed on your machine.
-
-### Installation
+## Installation
 
 1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/nascraft-webui.git
    ```
+
 2. Navigate to the project directory:
    ```bash
    cd nascraft-webui
    ```
-3. Install the dependencies:
+
+3. Install npm dependencies:
    ```bash
    npm install
    ```
 
-### Running the Application
+## Development
 
-To start the development server, run:
+### Running in Development Mode
 
-```
-bash
-npm start
-```
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+1. Start the development server:
+   ```bash
+   npm run tauri dev
+   ```
+   This will:
+   - Start the React development server
+   - Launch the Tauri application
+   - Enable hot-reloading for both frontend and Rust code
 
 ### Building for Production
 
-To build the app for production, run:
-```
-bash
-npm run build
-```
-The build artifacts will be stored in the `build/` directory.
+1. Build the application:
+   ```bash
+   npm run tauri build
+   ```
+   This will:
+   - Build the React application
+   - Compile the Rust code
+   - Package everything into a native executable
+   - Output the installer in `src-tauri/target/release`
 
 ## Project Structure
 
-- `src/`: Contains the source code.
-  - `pages/`: Different pages of the application.
-  - `components/`: Reusable components.
-  - `utils/`: Utility functions and API calls.
-  - `i18n/`: Internationalization setup.
-- `public/`: Public assets and HTML template.
+- `src/`: React application source code
+  - `components/`: Reusable React components
+  - `pages/`: Main application pages
+  - `utils/`: Utility functions and API calls
+  - `i18n/`: Internationalization setup
+- `src-tauri/`: Tauri application source code
+  - `src/`: Rust source code
+  - `capabilities/`: Tauri capability configurations
+  - `target/`: Build outputs
+
+## Key Features Implementation
+
+- **File Upload**: Implements chunk-based uploading with MD5 checksum verification
+- **Directory Monitoring**: Uses Tauri's file system API to watch specified directories
+- **System Initialization**: Handles database structure and configuration file setup
+- **Progress Tracking**: Provides real-time progress updates through a floating window
 
 ## Contributing
 
-Contributions are welcome! Please fork the repository and submit a pull request for any improvements.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
