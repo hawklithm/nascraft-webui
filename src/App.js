@@ -9,6 +9,7 @@ import UploadedFiles from './pages/UploadedFiles';
 import UploadProgress from './components/UploadProgress';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
+import VideoList from './pages/VideoList';
 
 const { Content } = Layout;
 
@@ -54,6 +55,7 @@ function App() {
           <Route path="/system-init" component={SystemInit} />
           <Route path="/upload" component={UploadForm} />
           <Route path="/uploaded-files" component={UploadedFiles} />
+          <Route path="/videos" component={VideoList} />
         </Switch>
         <UploadProgressWrapper />
       </MainLayout>
