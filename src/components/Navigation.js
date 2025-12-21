@@ -6,7 +6,8 @@ import {
   FileOutlined,
   HomeOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  PlayCircleOutlined
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -31,6 +32,11 @@ const Navigation = () => {
       key: '/uploaded-files',
       icon: <FileOutlined />,
       label: '已上传文件',
+    },
+    {
+      key: '/videos',
+      icon: <PlayCircleOutlined />,
+      label: '视频列表',
     },
   ];
 
