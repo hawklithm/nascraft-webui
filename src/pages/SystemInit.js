@@ -60,9 +60,9 @@ const SystemInit = () => {
   const checkSystemStatus = async () => {
     try {
       // Check table structure
-      await apiFetch('/check_table_structure', {
-        method: 'GET'
-      },false);
+      // await apiFetch('/check_table_structure', {
+      //   method: 'GET'
+      // },false);
       setInitStatus(prev => ({ ...prev, database: true }));
       let platform_name = "unknown";
       try{
@@ -94,9 +94,9 @@ const SystemInit = () => {
   const handleInitialize = async () => {
     setLoading(true);
     try {
-      await apiFetch('/ensure_table_structure', {
-        method: 'POST'
-      });
+      // await apiFetch('/ensure_table_structure', {
+      //   method: 'POST'
+      // });
 
       // 创建或更新 sys.conf 文件
       try {
@@ -218,8 +218,8 @@ const SystemInit = () => {
       case 0:
         return (
           <Card>
-            <Title level={4}>数据库初始化</Title>
-            <p>初始化系统数据库和表结构。</p>
+            <Title level={4}>系统初始化</Title>
+            <p>初始化系统配置</p>
             {errorData.length > 0 && (
               <Table
                 dataSource={errorData.map((error, index) => ({ key: index, error }))}

@@ -12,7 +12,7 @@ const withSystemCheck = (WrappedComponent) => {
     useEffect(() => {
       const checkSystem = async () => {
         try {
-          await checkSystemInitialization();
+          // await checkSystemInitialization();
           await startWatching();
           setChecking(false);
         } catch (error) {

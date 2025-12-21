@@ -6,9 +6,6 @@ module.exports = function(app) {
     createProxyMiddleware({
       target: 'http://localhost:8080',
       changeOrigin: true,
-      pathRewrite: {
-        '^/api': '', // 移除 /api 前缀
-      },
       onError: (err, req, res) => {
         console.log('Proxy Error:', err);
         res.writeHead(500, {

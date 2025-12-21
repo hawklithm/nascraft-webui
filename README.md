@@ -38,6 +38,7 @@ This project is the frontend for the NASCraft Management System, built with Reac
    ```
 3. Install the dependencies:
    ```bash
+   cargo install tauri-cli
    npm install
    ```
 
@@ -47,7 +48,8 @@ To start the development server, run:
 
 ```
 bash
-npm start
+npm start # for web
+npm run tauri # for desktop
 ```
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
@@ -56,7 +58,8 @@ Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 To build the app for production, run:
 ```
 bash
-npm run build
+npm run build # for web
+npm run tauri:build # for desktop
 ```
 The build artifacts will be stored in the `build/` directory.
 
