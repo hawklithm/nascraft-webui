@@ -108,6 +108,10 @@ const SystemInit = () => {
           message.error('请选择检查间隔时间');
           return;
         }
+        if (values.host === undefined) {
+          message.error('请输入后端服务地址');
+          return;
+        }
         if (values.watchDir === undefined || values.watchDir.length === 0) {
           values.watchDir = [];
           console.log("values.watchDir setting missing");
@@ -127,7 +131,8 @@ const SystemInit = () => {
         }));
         const newConfig = {
           watchDir: processedWatchDir,
-          interval: values.interval
+          interval: values.interval,
+          host: values.host
         };
         const dir_exists = await exists('', {
           baseDir: BaseDirectory.AppConfig,
@@ -264,6 +269,16 @@ const SystemInit = () => {
                     <Select.Option value={60}>平衡（60秒）</Select.Option>
                     <Select.Option value={300}>节能（300秒）</Select.Option>
                   </Select>
+                </Form.Item>
+                <Form.Item
+                  name="host"
+                  label="配置后端服务地址"
+                  rules={[{ required: true, message: '请检查服务地址' }]}
+                >
+                  <Input
+                    style={{ width: '70%' }}
+                    placeholder="输入服务地址"
+                  />
                 </Form.Item>
               </Form>
             )}
@@ -413,7 +428,7 @@ export const checkSysConf = async () => {
         throw new Error('sys.conf file is not valid JSON');
       }
     } else {
-      throw new Error('sys.conf file is missing');
+      throw new Error('sys.conf file need initialization');
     }
   };
 

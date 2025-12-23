@@ -3,7 +3,7 @@ import { Form, Upload, Button, Card, Typography, Input, message, Progress, Colla
 import { UploadOutlined } from '@ant-design/icons';
 import { useHistory } from 'react-router-dom';
 import SparkMD5 from 'spark-md5';
-import { apiFetch, config } from '../utils/apiFetch';
+import { apiFetch, config, getApiBaseUrl, isTauriRuntime, tauriHttpFetch } from '../utils/apiFetch';
 import withSystemCheck from '../components/withSystemCheck';
 
 const { Title } = Typography;
@@ -55,37 +55,60 @@ function UploadForm() {
         [chunk.start_offset]: 0
       }));
 
-      const xhr = new XMLHttpRequest();
-      
-      await new Promise((resolve, reject) => {
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percentComplete = Math.round((event.loaded / event.total) * 100);
-            setChunkProgress(prev => ({
-              ...prev,
-              [chunk.start_offset]: percentComplete
-            }));
-          }
-        };
+      const baseUrl = await getApiBaseUrl();
+      const isTauri = await isTauriRuntime();
 
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`HTTP Error: ${xhr.status}`));
-          }
-        };
+      if (isTauri) {
+        const bodyBuf = await file.slice(chunk.start_offset, chunk.end_offset + 1).arrayBuffer();
+        const response = await tauriHttpFetch(`${baseUrl}/upload`, {
+          method: 'POST',
+          headers: {
+            'X-File-ID': fileId,
+            'X-Start-Offset': String(chunk.start_offset),
+            'Content-Length': String(chunk.chunk_size),
+            'Content-Range': `bytes ${chunk.start_offset}-${chunk.end_offset}/${file.size}`,
+          },
+          body: new Uint8Array(bodyBuf),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP Error: ${response.status}`);
+        }
+        setChunkProgress(prev => ({
+          ...prev,
+          [chunk.start_offset]: 100
+        }));
+      } else {
+        const xhr = new XMLHttpRequest();
+        await new Promise((resolve, reject) => {
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              const percentComplete = Math.round((event.loaded / event.total) * 100);
+              setChunkProgress(prev => ({
+                ...prev,
+                [chunk.start_offset]: percentComplete
+              }));
+            }
+          };
 
-        xhr.onerror = () => reject(new Error('Network Error'));
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            } else {
+              reject(new Error(`HTTP Error: ${xhr.status}`));
+            }
+          };
 
-        xhr.open('POST', `${config.apiBaseUrl}/upload`);
-        xhr.setRequestHeader('X-File-ID', fileId);
-        xhr.setRequestHeader('X-Start-Offset', chunk.start_offset);
-        xhr.setRequestHeader('Content-Length', chunk.chunk_size);
-        xhr.setRequestHeader('Content-Range', `bytes ${chunk.start_offset}-${chunk.end_offset}/${file.size}`);
+          xhr.onerror = () => reject(new Error('Network Error'));
 
-        xhr.send(file.slice(chunk.start_offset, chunk.end_offset + 1));
-      });
+          xhr.open('POST', `${baseUrl}/upload`);
+          xhr.setRequestHeader('X-File-ID', fileId);
+          xhr.setRequestHeader('X-Start-Offset', chunk.start_offset);
+          xhr.setRequestHeader('Content-Length', chunk.chunk_size);
+          xhr.setRequestHeader('Content-Range', `bytes ${chunk.start_offset}-${chunk.end_offset}/${file.size}`);
+
+          xhr.send(file.slice(chunk.start_offset, chunk.end_offset + 1));
+        });
+      }
 
       return true;
     } catch (error) {

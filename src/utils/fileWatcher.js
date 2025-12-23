@@ -1,6 +1,6 @@
 import { readFile,watch, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { readTextFile } from '@tauri-apps/plugin-fs';
-import { apiFetch, config } from './apiFetch';
+import { apiFetch, config, getApiBaseUrl, isTauriRuntime, tauriHttpFetch } from './apiFetch';
 import SparkMD5 from 'spark-md5';
 import { audioDir, appDataDir, documentDir, downloadDir, pictureDir, videoDir } from '@tauri-apps/api/path';
 import { sep } from '@tauri-apps/api/path';
@@ -57,26 +57,44 @@ const calculateMD5 = (file) => {
 
 const uploadChunk = async (file, chunk, fileId) => {
   try {
-    const xhr = new XMLHttpRequest();
+    const baseUrl = await getApiBaseUrl();
+    const isTauri = await isTauriRuntime();
     
-    await new Promise((resolve, reject) => {
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-        } else {
-          reject(new Error(`HTTP Error: ${xhr.status}`));
-        }
-      };
+    if (isTauri) {
+      const bodyBuf = await file.slice(chunk.start_offset, chunk.end_offset + 1).arrayBuffer();
+      const response = await tauriHttpFetch(`${baseUrl}/upload`, {
+        method: 'POST',
+        headers: {
+          'X-File-ID': fileId,
+          'X-Start-Offset': String(chunk.start_offset),
+          'Content-Range': `bytes ${chunk.start_offset}-${chunk.end_offset}/${file.size}`,
+        },
+        body: new Uint8Array(bodyBuf),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+    } else {
+      const xhr = new XMLHttpRequest();
+      await new Promise((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`HTTP Error: ${xhr.status}`));
+          }
+        };
 
-      xhr.onerror = () => reject(new Error('Network Error'));
+        xhr.onerror = () => reject(new Error('Network Error'));
 
-      xhr.open('POST', `${config.apiBaseUrl}/upload`);
-      xhr.setRequestHeader('X-File-ID', fileId);
-      xhr.setRequestHeader('X-Start-Offset', chunk.start_offset);
-      xhr.setRequestHeader('Content-Range', `bytes ${chunk.start_offset}-${chunk.end_offset}/${file.size}`);
+        xhr.open('POST', `${baseUrl}/upload`);
+        xhr.setRequestHeader('X-File-ID', fileId);
+        xhr.setRequestHeader('X-Start-Offset', chunk.start_offset);
+        xhr.setRequestHeader('Content-Range', `bytes ${chunk.start_offset}-${chunk.end_offset}/${file.size}`);
 
-      xhr.send(file.slice(chunk.start_offset, chunk.end_offset + 1));
-    });
+        xhr.send(file.slice(chunk.start_offset, chunk.end_offset + 1));
+      });
+    }
 
     return true;
   } catch (error) {
