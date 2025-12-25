@@ -75,6 +75,13 @@ This project is the frontend for the NASCraft Management System, built with Reac
    - Package everything into a native executable
    - Output the installer in `src-tauri/target/release`
 
+2. Build Android App
+
+   ```bash
+   tauri android init
+   tauri android build
+   ```
+
 ## Project Structure
 
 - `src/`: React application source code
