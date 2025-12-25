@@ -14,7 +14,7 @@ val tauriProperties = Properties().apply {
 }
 
 android {
-    compileSdk = 24
+    compileSdk = 34
     namespace = "org.hawklithm.nascraft"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
