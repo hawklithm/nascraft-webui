@@ -21,6 +21,7 @@ const SystemInit = () => {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [reconfigMode, setReconfigMode] = useState(false);
   const [initStatus, setInitStatus] = useState({
     database: false,
     config: false,
@@ -56,6 +57,96 @@ const SystemInit = () => {
       setUploadList(progressList);
     });
   }, []);
+
+  const prefillFormFromSysConf = async () => {
+    const sysConfContent = await readTextFile(sysConfName, { baseDir: BaseDirectory.AppConfig });
+    const sysConfJson = JSON.parse(sysConfContent);
+
+    const watchDir = Array.isArray(sysConfJson.watchDir) ? sysConfJson.watchDir : [];
+    const interval = typeof sysConfJson.interval === 'number' ? sysConfJson.interval : undefined;
+    const host = typeof sysConfJson.host === 'string' ? sysConfJson.host : undefined;
+
+    const mappedWatchDir = watchDir.map((fullPath) => {
+      const option = pathOptions.find((o) => typeof o.path === 'string' && fullPath.startsWith(`${o.path}${sep()}`));
+      if (option) {
+        return {
+          select: option.path,
+          input: fullPath.slice(option.path.length + sep().length),
+          baseDir: option.baseDir,
+        };
+      }
+      return {
+        select: pathOptions.find((o) => o.name === '文档目录')?.path,
+        input: fullPath,
+        baseDir: pathOptions.find((o) => o.name === '文档目录')?.baseDir,
+      };
+    });
+
+    form.setFieldsValue({
+      watchDir: mappedWatchDir,
+      interval,
+      host,
+    });
+  };
+
+  useEffect(() => {
+    if (!reconfigMode) return;
+    if (pathOptions.length === 0) return;
+    (async () => {
+      try {
+        await prefillFormFromSysConf();
+      } catch (e) {
+        console.log('prefill sys.conf failed', e);
+      }
+    })();
+  }, [reconfigMode, pathOptions]);
+
+  const writeConfigFromFormValues = async (values) => {
+    if (values.interval === undefined) {
+      message.error('请选择检查间隔时间');
+      return false;
+    }
+    if (values.host === undefined) {
+      message.error('请输入后端服务地址');
+      return false;
+    }
+    if (values.watchDir === undefined || values.watchDir.length === 0) {
+      values.watchDir = [];
+      console.log('values.watchDir setting missing');
+    }
+
+    const processedWatchDir = await Promise.all(
+      values.watchDir.map(async (dir) => {
+        const select = dir.select || '';
+        const input = dir.input || '';
+        const baseDir = dir.baseDir || '';
+        const fullPath = `${select}${sep()}${input}`;
+        console.log('create dir=', fullPath, ',baseDir=', baseDir);
+        const dirExists = await exists(input, { baseDir: baseDir });
+        if (!dirExists) {
+          await mkdir(input, { baseDir: baseDir, recursive: true });
+        }
+        return fullPath;
+      })
+    );
+
+    const newConfig = {
+      watchDir: processedWatchDir,
+      interval: values.interval,
+      host: values.host,
+    };
+
+    const dir_exists = await exists('', {
+      baseDir: BaseDirectory.AppConfig,
+    });
+    if (!dir_exists) {
+      await mkdir('', {
+        baseDir: BaseDirectory.AppConfig,
+      });
+    }
+    await writeTextFile(sysConfName, JSON.stringify(newConfig, null, 2), { baseDir: BaseDirectory.AppConfig });
+    return true;
+  };
 
   const checkSystemStatus = async () => {
     try {
@@ -99,58 +190,26 @@ const SystemInit = () => {
       // });
 
       // 创建或更新 sys.conf 文件
-      try {
-        await checkSysConf();
-      } catch (error) {
-        // 如果 sys.conf 文件不存在或不符合要求，则创建文件
+      if (reconfigMode) {
         const values = form.getFieldsValue();
-        if (values.interval === undefined) {
-          message.error('请选择检查间隔时间');
-          return;
+        const ok = await writeConfigFromFormValues(values);
+        if (!ok) return;
+        message.success('配置已更新！');
+      } else {
+        try {
+          await checkSysConf();
+        } catch (error) {
+          const values = form.getFieldsValue();
+          const ok = await writeConfigFromFormValues(values);
+          if (!ok) return;
         }
-        if (values.host === undefined) {
-          message.error('请输入后端服务地址');
-          return;
-        }
-        if (values.watchDir === undefined || values.watchDir.length === 0) {
-          values.watchDir = [];
-          console.log("values.watchDir setting missing");
-        }
-        // 处理 watchDir，将 select 和 input 组合成完整路径
-        const processedWatchDir = await Promise.all(values.watchDir.map(async dir => {
-          const select = dir.select || '';
-          const input = dir.input || '';
-          const baseDir = dir.baseDir || '';
-          const fullPath = `${select}${sep()}${input}`;
-          console.log("create dir=",fullPath,",baseDir=",baseDir);
-          const dirExists = await exists(input, { baseDir: baseDir });
-          if (!dirExists) {
-            await mkdir(input, { baseDir: baseDir, recursive: true });
-          }
-          return fullPath;
-        }));
-        const newConfig = {
-          watchDir: processedWatchDir,
-          interval: values.interval,
-          host: values.host
-        };
-        const dir_exists = await exists('', {
-          baseDir: BaseDirectory.AppConfig,
-        });
-        if (!dir_exists) {
-          await mkdir('', {
-            baseDir: BaseDirectory.AppConfig,
-          });
-        }
-        await writeTextFile(
-          sysConfName,
-           JSON.stringify(newConfig, null, 2),
-           { baseDir: BaseDirectory.AppConfig }
-        );
+        message.success('系统初始化成功！');
       }
-      message.success('系统初始化成功！');
       await startWatching();
       setIsInitialized(true);
+      setReconfigMode(false);
+      setShowConfigForm(false);
+      setInitStatus(prev => ({ ...prev, config: true }));
     } catch (error) {
       message.error('初始化过程中出现错误：' + error.message);
       console.log(error)
@@ -160,18 +219,14 @@ const SystemInit = () => {
   };
 
   const handleFormSubmit = async (values) => {
-    const newConfig = {
-      watchDir: values.watchDir,
-      interval: values.interval
-    };
-    await writeTextFile(
-      sysConfName,
-      JSON.stringify(newConfig, null, 2),
-      { baseDir: BaseDirectory.AppConfig }
-    );
+    const ok = await writeConfigFromFormValues(values);
+    if (!ok) return;
     message.success('配置文件已更新！');
     setShowConfigForm(false);
     setInitStatus(prev => ({ ...prev, config: true }));
+    await startWatching();
+    setIsInitialized(true);
+    setReconfigMode(false);
   };
 
   const handleSelectFolder = async (fieldKey) => {
@@ -315,7 +370,7 @@ const SystemInit = () => {
     );
   }
 
-  if (isInitialized) {
+  if (isInitialized && !reconfigMode) {
     return (
       <div style={{ maxWidth: 800, margin: '50px auto', padding: '0 20px' }}>
         <Card>
@@ -330,6 +385,18 @@ const SystemInit = () => {
                 onClick={() => history.push('/welcome')}
               >
                 返回首页
+              </Button>
+              ,
+              <Button
+                size="small"
+                key="reconfig"
+                onClick={() => {
+                  setReconfigMode(true);
+                  setShowConfigForm(true);
+                  setInitStatus((prev) => ({ ...prev, config: false }));
+                }}
+              >
+                修改配置
               </Button>
             ]}
           />
@@ -372,7 +439,7 @@ const SystemInit = () => {
           loading={loading}
           disabled={isInitialized}
         >
-          {loading ? '初始化中...' : '开始初始化'}
+          {loading ? (reconfigMode ? '保存中...' : '初始化中...') : (reconfigMode ? '保存配置' : '开始初始化')}
         </Button>
       </div>
 

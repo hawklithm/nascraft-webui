@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Layout, Menu } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { Grid, Layout, Menu } from 'antd';
 import { useHistory, useLocation } from 'react-router-dom';
 import { 
   UploadOutlined, 
@@ -16,6 +16,8 @@ const Navigation = () => {
   const history = useHistory();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const screens = Grid.useBreakpoint();
+  const isMobile = useMemo(() => !screens.md, [screens.md]);
 
   const menuItems = [
     {
@@ -40,6 +42,35 @@ const Navigation = () => {
     },
   ];
 
+  if (isMobile) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 1000,
+          background: '#fff',
+          borderTop: '1px solid #f0f0f0',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
+        <Menu
+          className="mobile-bottom-nav"
+          mode="horizontal"
+          selectedKeys={[location.pathname]}
+          items={menuItems}
+          onClick={({ key }) => history.push(key)}
+          style={{
+            display: 'flex',
+            borderBottom: 0,
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <Sider 
       width={200} 
@@ -59,10 +90,6 @@ const Navigation = () => {
           color: '#597ef7',
           transition: 'all 0.3s',
           borderTop: '1px solid #f0f0f0',
-          ':hover': {
-            backgroundColor: '#e6f7ff',
-            color: '#1890ff',
-          }
         }}>
           {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
         </div>

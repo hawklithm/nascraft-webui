@@ -13,3 +13,30 @@
 .ant-menu-dark.ant-menu-inline .ant-menu-item-selected {
   background-color: #85a5ff !important; /* geekblue-3 */
 }
+
+.mobile-bottom-nav {
+  width: 100%;
+}
+
+.mobile-bottom-nav.ant-menu-horizontal {
+  display: flex;
+}
+
+.mobile-bottom-nav.ant-menu-horizontal > .ant-menu-item {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.mobile-bottom-nav.ant-menu-horizontal > .ant-menu-item .anticon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.mobile-bottom-nav.ant-menu-horizontal > .ant-menu-item .ant-menu-title-content {
+  display: block;
+  font-size: 12px;
+  line-height: 1.2;
+}

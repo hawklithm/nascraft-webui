@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { BrowserRouter as Router, Route, Switch, useLocation } from 'react-router-dom';
-import { Layout } from 'antd';
+import { Grid, Layout } from 'antd';
 import LoginForm from './pages/LoginForm';
 import Welcome from './pages/Welcome';
 import SystemInit from './pages/SystemInit';
@@ -26,6 +26,8 @@ const UploadProgressWrapper = () => {
 
 const MainLayout = ({ children }) => {
   const location = useLocation();
+  const screens = Grid.useBreakpoint();
+  const isMobile = useMemo(() => !screens.md, [screens.md]);
   const hiddenPaths = ['/', '/welcome'];
   
   if (hiddenPaths.includes(location.pathname)) {
@@ -37,7 +39,12 @@ const MainLayout = ({ children }) => {
       <Header />
       <Layout>
         <Navigation />
-        <Layout style={{ padding: '24px' }}>
+        <Layout
+          style={{
+            padding: '24px',
+            paddingBottom: isMobile ? 'calc(24px + 46px + env(safe-area-inset-bottom))' : '24px',
+          }}
+        >
           <Content>{children}</Content>
         </Layout>
       </Layout>
