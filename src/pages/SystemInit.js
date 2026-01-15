@@ -172,7 +172,7 @@ const SystemInit = () => {
         setInitStatus(prev => ({ ...prev, config: true }));
       }
 
-      setIsInitialized(true);
+      // setIsInitialized(true);
     } catch (error) {
       console.log('检查系统状态失败：' + error);
       setErrorData([error.message]);
@@ -206,7 +206,7 @@ const SystemInit = () => {
         message.success('系统初始化成功！');
       }
       await startWatching();
-      setIsInitialized(true);
+      // setIsInitialized(true);
       setReconfigMode(false);
       setShowConfigForm(false);
       setInitStatus(prev => ({ ...prev, config: true }));
@@ -225,7 +225,7 @@ const SystemInit = () => {
     setShowConfigForm(false);
     setInitStatus(prev => ({ ...prev, config: true }));
     await startWatching();
-    setIsInitialized(true);
+    // setIsInitialized(true);
     setReconfigMode(false);
   };
 
@@ -370,7 +370,7 @@ const SystemInit = () => {
     );
   }
 
-  if (isInitialized && !reconfigMode) {
+  if (/*isInitialized &&*/ !reconfigMode) {
     return (
       <div style={{ maxWidth: 800, margin: '50px auto', padding: '0 20px' }}>
         <Card>

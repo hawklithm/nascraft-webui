@@ -81,6 +81,45 @@ export const tauriHttpFetch = async (url, options) => {
   };
 };
 
+const probeHello = async (host) => {
+  const h = normalizeHost(host);
+  if (!h) return false;
+  const url = `${h}${API_BASE_PATH}/hello`;
+  const timeoutMs = 2000;
+
+  const withTimeout = async (p) => {
+    let t;
+    try {
+      return await Promise.race([
+        p,
+        new Promise((_, reject) => {
+          t = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (t) clearTimeout(t);
+    }
+  };
+  try {
+    const tauri = await isTauriRuntime();
+    if (tauri) {
+      const resp = await withTimeout(tauriHttpFetch(url, { method: 'GET' }));
+      return resp && resp.status === 200;
+    }
+
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const resp = await fetch(url, { method: 'GET', signal: controller.signal });
+      return resp && resp.status === 200;
+    } finally {
+      clearTimeout(id);
+    }
+  } catch (e) {
+    return false;
+  }
+};
+
 const loadApiBaseUrlFromSysConf = async (force = false) => {
   const now = Date.now();
   if (!force && now - lastLoadedAt < CACHE_TTL_MS) {
@@ -96,7 +135,7 @@ const loadApiBaseUrlFromSysConf = async (force = false) => {
   }
 
   try {
-    const { readTextFile, watch, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    const { readTextFile, writeTextFile, watch, BaseDirectory } = await import('@tauri-apps/plugin-fs');
 
     if (!isWatching) {
       isWatching = true;
@@ -120,11 +159,56 @@ const loadApiBaseUrlFromSysConf = async (force = false) => {
     const sysConfContent = await readTextFile(SYS_CONF_NAME, { baseDir: BaseDirectory.AppConfig });
     const sysConfJson = JSON.parse(sysConfContent);
     const host = normalizeHost(sysConfJson.host);
-    cachedApiBaseUrl = host ? `${host}${API_BASE_PATH}` : API_BASE_PATH;
-    return cachedApiBaseUrl;
+    if (host) {
+      const ok = await probeHello(host);
+      if (ok) {
+        cachedApiBaseUrl = `${host}${API_BASE_PATH}`;
+        return cachedApiBaseUrl;
+      }
+    }
+
+    // If host is not configured or not reachable, try to discover a nascraft server via mDNS.
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const list = await invoke('discover_nascraft_services', { timeout_ms: 1500 });
+      if (Array.isArray(list) && list.length > 0) {
+        const candidates = [];
+        for (const svc of list) {
+          const port = (svc && svc.port) ? svc.port : 8080;
+          const ips = (svc && Array.isArray(svc.ip_v4)) ? svc.ip_v4 : [];
+          for (const ip of ips) {
+            if (ip) candidates.push(`http://${ip}:${port}`);
+          }
+
+          // Defensive fallback: if Rust side didn't include any IPs, try hostname.
+          if ((!ips || ips.length === 0) && svc && svc.hostname) {
+            candidates.push(`http://${svc.hostname}:${port}`);
+          }
+        }
+
+        for (const candidateHost of candidates) {
+          const ok = await probeHello(candidateHost);
+          if (ok) {
+            sysConfJson.host = candidateHost;
+            try {
+              await writeTextFile(SYS_CONF_NAME, JSON.stringify(sysConfJson, null, 2), { baseDir: BaseDirectory.AppConfig });
+            } catch (e) {
+              console.log('write sys.conf host failed:', e);
+            }
+            cachedApiBaseUrl = `${candidateHost}${API_BASE_PATH}`;
+            return cachedApiBaseUrl;
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore discovery errors and fall back to default.
+      console.log('mDNS discovery failed:', e);
+    }
+
+    throw new Error('网络异常，服务端不在线');
   } catch (e) {
     cachedApiBaseUrl = API_BASE_PATH;
-    return cachedApiBaseUrl;
+    throw e;
   }
 };
 

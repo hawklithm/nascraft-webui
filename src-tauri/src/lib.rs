@@ -3,6 +3,7 @@ use notify::{recommended_watcher, Config, RecursiveMode, Watcher};
 use std::{sync::mpsc::channel, time::Duration};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use log::{info, warn};
 
 #[derive(Debug, Deserialize)]
 struct HttpProxyRequest {
@@ -12,12 +13,96 @@ struct HttpProxyRequest {
   body: Option<Vec<u8>>,
 }
 
+#[cfg(not(mobile))]
+#[tauri::command]
+async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsDiscoveredServer>, String> {
+  use mdns_sd::{ServiceDaemon, ServiceEvent};
+  use std::collections::HashSet;
+
+  let timeout_ms = timeout_ms.unwrap_or(1500);
+  let service_type = "_nascraft._tcp.local.";
+
+  let mdns = ServiceDaemon::new().map_err(|e| e.to_string())?;
+  let receiver = mdns.browse(service_type).map_err(|e| e.to_string())?;
+  info!("mDNS browse started: type={}, timeout_ms={}", service_type, timeout_ms);
+
+  let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+  let mut out: Vec<MdnsDiscoveredServer> = Vec::new();
+  let mut seen: HashSet<String> = HashSet::new();
+
+  while std::time::Instant::now() < deadline {
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    match receiver.recv_timeout(std::cmp::min(remaining, std::time::Duration::from_millis(250))) {
+      Ok(ServiceEvent::SearchStarted(_ty)) => {}
+      Ok(ServiceEvent::ServiceFound(_fullname, _ty)) => {}
+      Ok(ServiceEvent::ServiceResolved(resolved)) => {
+        if !resolved.is_valid() {
+          continue;
+        }
+        let fullname = resolved.get_fullname().to_string();
+        if seen.contains(&fullname) {
+          continue;
+        }
+        seen.insert(fullname.clone());
+
+        let mut v4_list: Vec<String> = resolved
+          .get_addresses_v4()
+          .into_iter()
+          .map(|ip| ip.to_string())
+          .collect();
+        v4_list.sort();
+
+        // Some environments might not provide an A record; fall back to hostname.
+        let hostname = resolved.get_hostname().to_string();
+        if v4_list.is_empty() {
+          v4_list.push(hostname.clone());
+        }
+
+        // Derive instance name from fullname: <instance>.<service_type>
+        let instance_name = fullname.clone()          
+          .strip_suffix(service_type)
+          .and_then(|s| s.strip_suffix('.'))
+          .unwrap_or(fullname.clone().as_str())
+          .to_string();
+
+        out.push(MdnsDiscoveredServer {
+          instance_name,
+          service_type: service_type.to_string(),
+          hostname,
+          ip_v4: v4_list,
+          port: resolved.get_port(),
+        });
+      }
+      Ok(_other) => {}
+      Err(_e) => {}
+    }
+  }
+
+  let _ = mdns.shutdown();
+  Ok(out)
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+async fn discover_nascraft_services(_timeout_ms: Option<u64>) -> Result<Vec<MdnsDiscoveredServer>, String> {
+  Err("mDNS discovery is not supported on mobile builds yet".to_string())
+}
+
 #[derive(Debug, Serialize)]
 struct HttpProxyResponse {
   status: u16,
   status_text: String,
   headers: HashMap<String, String>,
   body: Vec<u8>,
+}
+
+#[derive(Debug, Serialize)]
+struct MdnsDiscoveredServer {
+  instance_name: String,
+  service_type: String,
+  hostname: String,
+  ip_v4: Vec<String>,
+  port: u16,
 }
 
 #[tauri::command]
@@ -71,7 +156,7 @@ pub fn run() {
   .plugin(tauri_plugin_os::init())
   .plugin(tauri_plugin_dialog::init())
   .plugin(tauri_plugin_http::init())
-    .invoke_handler(tauri::generate_handler![http_proxy_fetch])
+    .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
