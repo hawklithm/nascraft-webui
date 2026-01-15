@@ -84,8 +84,86 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
 
 #[cfg(mobile)]
 #[tauri::command]
-async fn discover_nascraft_services(_timeout_ms: Option<u64>) -> Result<Vec<MdnsDiscoveredServer>, String> {
-  Err("mDNS discovery is not supported on mobile builds yet".to_string())
+async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsDiscoveredServer>, String> {
+  use serde::{Deserialize, Serialize};
+  use std::collections::HashSet;
+  use tokio::net::UdpSocket;
+
+  #[derive(Debug, Serialize)]
+  struct Probe {
+    t: String,
+    v: u32,
+  }
+
+  #[derive(Debug, Deserialize)]
+  struct Resp {
+    t: String,
+    v: u32,
+    name: Option<String>,
+    proto: Option<String>,
+    port: Option<u16>,
+  }
+
+  let timeout_ms = timeout_ms.unwrap_or(1500);
+  let discovery_port: u16 = 53530;
+  let service_type = "_nascraft._udp.local.";
+
+  let sock = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| e.to_string())?;
+  sock.set_broadcast(true).map_err(|e| e.to_string())?;
+
+  let probe = Probe {
+    t: "nascraft_discover".to_string(),
+    v: 1,
+  };
+  let payload = serde_json::to_vec(&probe).map_err(|e| e.to_string())?;
+
+  // Send to limited broadcast. On some networks, 255.255.255.255 is restricted, but this is a good default.
+  let broadcast_addr = format!("255.255.255.255:{}", discovery_port);
+  let _ = sock.send_to(&payload, &broadcast_addr).await;
+
+  let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+  let mut out: Vec<MdnsDiscoveredServer> = Vec::new();
+  let mut seen: HashSet<String> = HashSet::new();
+  let mut buf = vec![0u8; 2048];
+
+  while std::time::Instant::now() < deadline {
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    let per_recv = std::cmp::min(remaining, std::time::Duration::from_millis(250));
+
+    match tokio::time::timeout(per_recv, sock.recv_from(&mut buf)).await {
+      Ok(Ok((n, peer))) => {
+        let resp: Result<Resp, _> = serde_json::from_slice(&buf[..n]);
+        let resp = match resp {
+          Ok(r) => r,
+          Err(_) => continue,
+        };
+
+        if resp.t != "nascraft_here" || resp.v != 1 {
+          continue;
+        }
+
+        let port = resp.port.unwrap_or(8080);
+        let ip = peer.ip().to_string();
+        let key = format!("{}:{}", ip, port);
+        if seen.contains(&key) {
+          continue;
+        }
+        seen.insert(key);
+
+        out.push(MdnsDiscoveredServer {
+          instance_name: resp.name.unwrap_or_else(|| "nascraft".to_string()),
+          service_type: service_type.to_string(),
+          hostname: ip.clone(),
+          ip_v4: vec![ip],
+          port,
+        });
+      }
+      Ok(Err(_e)) => {}
+      Err(_elapsed) => {}
+    }
+  }
+
+  Ok(out)
 }
 
 #[derive(Debug, Serialize)]

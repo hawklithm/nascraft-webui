@@ -30,4 +30,4 @@ tauri-plugin-dialog = "2.2.0"
 tauri-plugin-http = "2.5.4"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 mdns-sd = "0.17"
-tokio = { version = "1.0", features = ["rt", "time"] }
+tokio = { version = "1.0", features = ["rt", "time", "net"] }
