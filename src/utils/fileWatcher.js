@@ -129,24 +129,31 @@ const handleFileUpload = async (filePath) => {
     let targetPath = '';
     let targetBaseDir = null;
 
-    // 查找匹配的前缀路径
-    for (const [path, baseDir] of pathMap.entries()) {
-      if (filePath.startsWith(path)) {
-        targetPath = filePath.substring(path.length + 1); // +1 是为了去掉路径分隔符
-        targetBaseDir = baseDir;
-        break;
+    // Prefer absolute path read (arbitrary directories)
+    let fileContent = null;
+    try {
+      fileContent = await readFile(filePath);
+    } catch (e) {
+      // fallback to BaseDirectory mapping
+      for (const [path, baseDir] of pathMap.entries()) {
+        if (filePath.startsWith(path)) {
+          targetPath = filePath.substring(path.length + 1);
+          targetBaseDir = baseDir;
+          break;
+        }
       }
-    }
 
-    if (!targetBaseDir) {
-      throw new Error('无法找到匹配的目录');
+      if (!targetBaseDir) {
+        throw e;
+      }
+
+      fileContent = await readFile(targetPath, { baseDir: targetBaseDir });
     }
 
     // 更新初始状态
     updateUploadProgress(filePath, 0, 'uploading');
 
-    // 读取文件内容
-    const fileContent = await readFile(targetPath, { baseDir: targetBaseDir });
+    // fileContent already loaded
     if (fileContent.length === 0) {
       console.log("fileContent is empty,skip");
       updateUploadProgress(filePath, 0, 'error');
@@ -233,7 +240,6 @@ const updateWatchDirs = async () => {
             }
           },
           {
-            baseDir: BaseDirectory.App,
             delayMs: interval * 1000,
             recursive: true,
           }

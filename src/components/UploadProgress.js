@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FloatButton, Drawer, List, Progress, Badge, Typography } from 'antd';
+import React, { useState, useEffect, useMemo } from 'react';
+import { FloatButton, Drawer, List, Progress, Badge, Typography, Grid } from 'antd';
 import { CloudUploadOutlined } from '@ant-design/icons';
 import { setUploadProgressCallback } from '../utils/fileWatcher';
 import { sep } from '@tauri-apps/api/path';
@@ -7,6 +7,8 @@ import { sep } from '@tauri-apps/api/path';
 const UploadProgress = () => {
   const [showUploadProgress, setShowUploadProgress] = useState(false);
   const [uploadList, setUploadList] = useState([]);
+  const screens = Grid.useBreakpoint();
+  const isMobile = useMemo(() => !screens.md, [screens.md]);
 
   useEffect(() => {
     const callback = (progressList) => {
@@ -14,6 +16,12 @@ const UploadProgress = () => {
     };
     setUploadProgressCallback(callback);
     return () => setUploadProgressCallback(null);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setShowUploadProgress(true);
+    window.addEventListener('nascraft:openUploadProgress', handler);
+    return () => window.removeEventListener('nascraft:openUploadProgress', handler);
   }, []);
 
   const getFileName = (filePath) => {
@@ -36,20 +44,22 @@ const UploadProgress = () => {
 
   return (
     <>
-      <FloatButton
-        icon={<CloudUploadOutlined />}
-        type="primary"
-        style={{ right: 24, bottom: 24 }}
-        onClick={() => setShowUploadProgress(true)}
-        badge={{ count: uploadList.filter(([_, { status }]) => status === 'uploading').length }}
-      />
+      {!isMobile && (
+        <FloatButton
+          icon={<CloudUploadOutlined />}
+          type="primary"
+          style={{ right: 24, bottom: 24 }}
+          onClick={() => setShowUploadProgress(true)}
+          badge={{ count: uploadList.filter(([_, { status }]) => status === 'uploading').length }}
+        />
+      )}
 
       <Drawer
         title="文件上传进度"
         placement="right"
         onClose={() => setShowUploadProgress(false)}
         open={showUploadProgress}
-        width={400}
+        width={isMobile ? '100%' : 400}
       >
         <List
           dataSource={uploadList}

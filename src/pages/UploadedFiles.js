@@ -92,11 +92,14 @@ function UploadedFiles() {
       key: 'file_id',
       sorter: true,
       sortOrder: sortConfig.sortBy === 'id' && `${sortConfig.order}end`,
+      width: 160,
+      fixed: 'left',
     },
     {
       title: '文件名',
       dataIndex: 'filename',
       key: 'filename',
+      width: 220,
     },
     {
       title: '文件大小 (MB)',
@@ -105,11 +108,13 @@ function UploadedFiles() {
       render: (size) => (size / (1024 * 1024)).toFixed(2),
       sorter: true,
       sortOrder: sortConfig.sortBy === 'size' && `${sortConfig.order}end`,
+      width: 140,
     },
     {
       title: '校验和',
       dataIndex: 'checksum',
       key: 'checksum',
+      width: 220,
     },
     {
       title: '上传时间',
@@ -118,16 +123,20 @@ function UploadedFiles() {
       render: (timestamp) => dayjs(timestamp * 1000).format('YYYY-MM-DD HH:mm:ss'),
       sorter: true,
       sortOrder: sortConfig.sortBy === 'date' && `${sortConfig.order}end`,
+      width: 180,
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
       render: (status) => (status === 2 ? '已完成' : '处理中'),
+      width: 100,
     },
     {
       title: '操作',
       key: 'action',
+      width: 100,
+      fixed: 'right',
       render: (text, record) => (
         <Tag color="blue" onClick={() => downloadFile(record.file_id, record.filename)} style={{ cursor: 'pointer' }}>
           下载
@@ -145,6 +154,8 @@ function UploadedFiles() {
         rowKey="file_id"
         loading={loading}
         onChange={handleTableChange}
+        tableLayout="fixed"
+        scroll={{ x: 'max-content' }}
         pagination={{
           current: currentPage,
           pageSize: pageSize,

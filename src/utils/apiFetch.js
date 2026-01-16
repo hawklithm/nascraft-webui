@@ -87,6 +87,8 @@ const probeHello = async (host) => {
   const url = `${h}${API_BASE_PATH}/hello`;
   const timeoutMs = 2000;
 
+  console.log('[nascraft] probeHello start:', url);
+
   const withTimeout = async (p) => {
     let t;
     try {
@@ -104,6 +106,7 @@ const probeHello = async (host) => {
     const tauri = await isTauriRuntime();
     if (tauri) {
       const resp = await withTimeout(tauriHttpFetch(url, { method: 'GET' }));
+      console.log('[nascraft] probeHello tauri response:', { url, status: resp && resp.status });
       return resp && resp.status === 200;
     }
 
@@ -111,11 +114,13 @@ const probeHello = async (host) => {
     const id = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const resp = await fetch(url, { method: 'GET', signal: controller.signal });
+      console.log('[nascraft] probeHello fetch response:', { url, status: resp && resp.status });
       return resp && resp.status === 200;
     } finally {
       clearTimeout(id);
     }
   } catch (e) {
+    console.log('[nascraft] probeHello failed:', { url, error: String(e) });
     return false;
   }
 };
@@ -159,18 +164,23 @@ const loadApiBaseUrlFromSysConf = async (force = false) => {
     const sysConfContent = await readTextFile(SYS_CONF_NAME, { baseDir: BaseDirectory.AppConfig });
     const sysConfJson = JSON.parse(sysConfContent);
     const host = normalizeHost(sysConfJson.host);
+    console.log('[nascraft] sys.conf loaded:', { host: host || null });
     if (host) {
+      console.log('[nascraft] probing configured host:', host);
       const ok = await probeHello(host);
       if (ok) {
+        console.log('[nascraft] configured host is reachable:', host);
         cachedApiBaseUrl = `${host}${API_BASE_PATH}`;
         return cachedApiBaseUrl;
       }
+      console.log('[nascraft] configured host is NOT reachable, will try discovery:', host);
     }
 
     // If host is not configured or not reachable, try to discover a nascraft server via mDNS.
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       const list = await invoke('discover_nascraft_services', { timeout_ms: 1500 });
+      console.log('[nascraft] discovery result:', { count: Array.isArray(list) ? list.length : null, list });
       if (Array.isArray(list) && list.length > 0) {
         const candidates = [];
         for (const svc of list) {
@@ -186,12 +196,17 @@ const loadApiBaseUrlFromSysConf = async (force = false) => {
           }
         }
 
+        console.log('[nascraft] discovery candidates:', candidates);
+
         for (const candidateHost of candidates) {
+          console.log('[nascraft] probing discovered candidate:', candidateHost);
           const ok = await probeHello(candidateHost);
           if (ok) {
+            console.log('[nascraft] discovered candidate selected:', candidateHost);
             sysConfJson.host = candidateHost;
             try {
               await writeTextFile(SYS_CONF_NAME, JSON.stringify(sysConfJson, null, 2), { baseDir: BaseDirectory.AppConfig });
+              console.log('[nascraft] sys.conf updated with host:', candidateHost);
             } catch (e) {
               console.log('write sys.conf host failed:', e);
             }

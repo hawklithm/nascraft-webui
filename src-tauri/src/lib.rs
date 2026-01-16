@@ -24,7 +24,7 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
 
   let mdns = ServiceDaemon::new().map_err(|e| e.to_string())?;
   let receiver = mdns.browse(service_type).map_err(|e| e.to_string())?;
-  info!("mDNS browse started: type={}, timeout_ms={}", service_type, timeout_ms);
+  info!("mDNS discovery started: service_type={}, timeout_ms={}", service_type, timeout_ms);
 
   let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
   let mut out: Vec<MdnsDiscoveredServer> = Vec::new();
@@ -72,12 +72,17 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
           ip_v4: v4_list,
           port: resolved.get_port(),
         });
+
+        info!("mDNS service resolved: fullname={}", resolved.get_fullname());
       }
       Ok(_other) => {}
-      Err(_e) => {}
+      Err(e) => {
+        info!("mDNS discovery recv_timeout error: {}", e);
+      }
     }
   }
 
+  info!("mDNS discovery finished: services_found={}", out.len());
   let _ = mdns.shutdown();
   Ok(out)
 }
@@ -108,6 +113,11 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
   let discovery_port: u16 = 53530;
   let service_type = "_nascraft._udp.local.";
 
+  info!(
+    "UDP discovery started (mobile): broadcast_port={}, timeout_ms={}",
+    discovery_port, timeout_ms
+  );
+
   let sock = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| e.to_string())?;
   sock.set_broadcast(true).map_err(|e| e.to_string())?;
 
@@ -119,7 +129,14 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
 
   // Send to limited broadcast. On some networks, 255.255.255.255 is restricted, but this is a good default.
   let broadcast_addr = format!("255.255.255.255:{}", discovery_port);
-  let _ = sock.send_to(&payload, &broadcast_addr).await;
+  match sock.send_to(&payload, &broadcast_addr).await {
+    Ok(n) => {
+      info!("UDP discovery probe sent: addr={}, bytes={}", broadcast_addr, n);
+    }
+    Err(e) => {
+      info!("UDP discovery probe send failed: addr={}, err={}", broadcast_addr, e);
+    }
+  }
 
   let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
   let mut out: Vec<MdnsDiscoveredServer> = Vec::new();
@@ -135,7 +152,10 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
         let resp: Result<Resp, _> = serde_json::from_slice(&buf[..n]);
         let resp = match resp {
           Ok(r) => r,
-          Err(_) => continue,
+          Err(e) => {
+            info!("UDP discovery: ignoring invalid JSON from {}: {}", peer, e);
+            continue;
+          }
         };
 
         if resp.t != "nascraft_here" || resp.v != 1 {
@@ -157,10 +177,17 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
           ip_v4: vec![ip],
           port,
         });
+
+        info!("UDP discovery response accepted: peer={}", peer);
       }
       Ok(Err(_e)) => {}
       Err(_elapsed) => {}
     }
+  }
+
+  info!("UDP discovery finished (mobile): services_found={}", out.len());
+  if out.is_empty() {
+    info!("UDP discovery finished (mobile): no services discovered");
   }
 
   Ok(out)

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useHistory } from 'react-router-dom';
-import { Card, Button, Steps, Typography, message, Result, Table, Form, Input,  Select, FloatButton, Drawer, List, Progress, Badge } from 'antd';
+import { Card, Button, Steps, Typography, message, Result, Table, Form, Input, Select, FloatButton, Drawer, List, Progress, Badge } from 'antd';
 import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined, ExclamationCircleOutlined, CloudUploadOutlined } from '@ant-design/icons';
 import { apiFetch } from '../utils/apiFetch';
+import { isTauriRuntime } from '../utils/apiFetch';
 import {readTextFile,mkdir, exists, BaseDirectory,writeTextFile } from '@tauri-apps/plugin-fs';
 import * as path from '@tauri-apps/api/path';
 import { platform } from '@tauri-apps/plugin-os';
@@ -39,13 +40,19 @@ const SystemInit = () => {
 
   useEffect(() => {
     const fetchPaths = async () => {
+      const isTauri = await isTauriRuntime();
+      if (!isTauri) {
+        setPathOptions([]);
+        return;
+      }
+
       const paths = await Promise.all([
-        { name: '音频目录', path: await audioDir(),baseDir:BaseDirectory.Audio },
-        { name: '应用数据目录', path: await appDataDir(),baseDir:BaseDirectory.AppData },
-        { name: '文档目录', path: await documentDir(),baseDir:BaseDirectory.Document },
-        { name: '下载目录', path: await downloadDir(),baseDir:BaseDirectory.Download },
-        { name: '图片目录', path: await pictureDir(),baseDir:BaseDirectory.Picture },
-        { name: '视频目录', path: await videoDir(),baseDir:BaseDirectory.Video },
+        { name: '音频目录', path: await audioDir(), baseDir: BaseDirectory.Audio },
+        { name: '应用数据目录', path: await appDataDir(), baseDir: BaseDirectory.AppData },
+        { name: '文档目录', path: await documentDir(), baseDir: BaseDirectory.Document },
+        { name: '下载目录', path: await downloadDir(), baseDir: BaseDirectory.Download },
+        { name: '图片目录', path: await pictureDir(), baseDir: BaseDirectory.Picture },
+        { name: '视频目录', path: await videoDir(), baseDir: BaseDirectory.Video },
       ]);
       setPathOptions(paths);
     };
@@ -66,24 +73,8 @@ const SystemInit = () => {
     const interval = typeof sysConfJson.interval === 'number' ? sysConfJson.interval : undefined;
     const host = typeof sysConfJson.host === 'string' ? sysConfJson.host : undefined;
 
-    const mappedWatchDir = watchDir.map((fullPath) => {
-      const option = pathOptions.find((o) => typeof o.path === 'string' && fullPath.startsWith(`${o.path}${sep()}`));
-      if (option) {
-        return {
-          select: option.path,
-          input: fullPath.slice(option.path.length + sep().length),
-          baseDir: option.baseDir,
-        };
-      }
-      return {
-        select: pathOptions.find((o) => o.name === '文档目录')?.path,
-        input: fullPath,
-        baseDir: pathOptions.find((o) => o.name === '文档目录')?.baseDir,
-      };
-    });
-
     form.setFieldsValue({
-      watchDir: mappedWatchDir,
+      watchDir,
       interval,
       host,
     });
@@ -102,6 +93,12 @@ const SystemInit = () => {
   }, [reconfigMode, pathOptions]);
 
   const writeConfigFromFormValues = async (values) => {
+    const isTauri = await isTauriRuntime();
+    if (!isTauri) {
+      message.warning('当前不在桌面应用环境中，配置文件不会写入本地。');
+      return true;
+    }
+
     if (values.interval === undefined) {
       message.error('请选择检查间隔时间');
       return false;
@@ -115,20 +112,7 @@ const SystemInit = () => {
       console.log('values.watchDir setting missing');
     }
 
-    const processedWatchDir = await Promise.all(
-      values.watchDir.map(async (dir) => {
-        const select = dir.select || '';
-        const input = dir.input || '';
-        const baseDir = dir.baseDir || '';
-        const fullPath = `${select}${sep()}${input}`;
-        console.log('create dir=', fullPath, ',baseDir=', baseDir);
-        const dirExists = await exists(input, { baseDir: baseDir });
-        if (!dirExists) {
-          await mkdir(input, { baseDir: baseDir, recursive: true });
-        }
-        return fullPath;
-      })
-    );
+    const processedWatchDir = (values.watchDir || []).filter((p) => typeof p === 'string' && p.trim());
 
     const newConfig = {
       watchDir: processedWatchDir,
@@ -155,15 +139,8 @@ const SystemInit = () => {
       //   method: 'GET'
       // },false);
       setInitStatus(prev => ({ ...prev, database: true }));
-      let platform_name = "unknown";
-      try{
-        platform_name = await platform();
-      }catch(e){
-        console.log("no in tauri");
-      }
-      console.log("platform=",platform_name);
-      // Check if running in Tauri
-      if (platform_name!=="unknown") {
+      const isTauri = await isTauriRuntime();
+      if (isTauri) {
         // Check sys.conf file
         await checkSysConf();
         setInitStatus(prev => ({ ...prev, config: true }));
@@ -230,17 +207,9 @@ const SystemInit = () => {
   };
 
   const handleSelectFolder = async (fieldKey) => {
-    const appDataDir = await path.appDataDir();
-    console.log("appDataDir=", appDataDir);
-    const appLocalDataDir = await path.appLocalDataDir();
-    console.log("appLocalDataDir=", appLocalDataDir);
     const folder = await open({
       multiple: false,
       directory: true,
-      filters: [
-        { name: appDataDir, extensions: ['*']},
-        { name: appLocalDataDir, extensions: ['*']},
-      ],
     });
     if (folder) {
       const currentWatchDir = form.getFieldValue('watchDir') || [];
@@ -306,7 +275,15 @@ const SystemInit = () => {
                           label={`配置需要同步的文件夹路径`}
                           rules={[{ required: true, message: '请选择文件夹路径' }]}
                         >
-                          <FolderPathInput fieldKey={fieldKey} form={form} options={pathOptions} />
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <Input
+                              readOnly
+                              placeholder="请选择需要监听的文件夹"
+                              value={form.getFieldValue(['watchDir', fieldKey])}
+                              style={{ flex: 1 }}
+                            />
+                            <Button onClick={() => handleSelectFolder(fieldKey)}>选择</Button>
+                          </div>
                           <Button type="dashed" onClick={() => remove(name)}>删除</Button>
                         </Form.Item>
                       ))}
@@ -498,82 +475,5 @@ export const checkSysConf = async () => {
       throw new Error('sys.conf file need initialization');
     }
   };
-
-const FolderPathInput = ({ fieldKey, form, options }) => {
-  const [combinedPath, setCombinedPath] = useState('');
-
-  const handleSelectChange = (value) => {
-    const currentInput = form.getFieldValue(['watchDir', fieldKey, 'input']) || '';
-    const combined = `${value}${sep()}${currentInput}`;
-    form.setFieldsValue({
-      watchDir: {
-        [fieldKey]: {
-          select: value,
-          input: currentInput,
-          baseDir:options.find(option => option.path === value)?.baseDir
-        },
-      },
-    });
-    setCombinedPath(combined);
-  };
-
-  const handleInputChange = (e) => {
-    const currentSelect = form.getFieldValue(['watchDir', fieldKey, 'select']) || options.find(option => option.name === '文档目录')?.path;
-    const combined = `${currentSelect}${sep()}${e.target.value}`;
-    form.setFieldsValue({
-      watchDir: {
-        [fieldKey]: {
-          select: currentSelect,
-          input: e.target.value,
-          baseDir:options.find(option => option.path === currentSelect)?.baseDir
-        },
-      },
-    });
-    setCombinedPath(combined);
-  };
-
-  useEffect(() => {
-    const defaultOption = options.find(option => option.name === '文档目录');
-    if (defaultOption) {
-      const currentInput = form.getFieldValue(['watchDir', fieldKey, 'input']) || '';
-      const combined = `${defaultOption.path}${sep()}${currentInput}`;
-      form.setFieldsValue({
-        watchDir: {
-          [fieldKey]: {
-            select: defaultOption.path,
-            input: currentInput,
-            baseDir:defaultOption.baseDir
-          },
-        },
-      });
-      setCombinedPath(combined);
-    }
-  }, [options, fieldKey, form]);
-
-  return (
-    <div>
-      <Input.Group compact>
-        <Select
-          style={{ width: '30%' }}
-          onChange={handleSelectChange}
-          placeholder="选择路径"
-          defaultValue={options.find(option => option.name === '文档目录')?.path}
-        >
-          {options.map((option, index) => (
-            <Select.Option key={option.name} value={option.path}>{option.name}</Select.Option>
-          ))}
-        </Select>
-        <Input
-          style={{ width: '70%' }}
-          placeholder="输入路径"
-          onChange={handleInputChange}
-        />
-      </Input.Group>
-      <div style={{ marginTop: 8 }}>
-        <Typography.Text type="secondary">完整路径: {combinedPath}</Typography.Text>
-      </div>
-    </div>
-  );
-};
 
 export default SystemInit; 
