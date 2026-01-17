@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useHistory } from 'react-router-dom';
 import { Card, Button, Steps, Typography, message, Result, Table, Form, Input, Select, FloatButton, Drawer, List, Progress, Badge } from 'antd';
 import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined, ExclamationCircleOutlined, CloudUploadOutlined } from '@ant-design/icons';
@@ -234,12 +234,6 @@ const SystemInit = () => {
     }
   };
 
-  const handleAddMobileWatchDir = () => {
-    const currentWatchDir = form.getFieldValue('watchDir') || [];
-    currentWatchDir.push({ baseDir: BaseDirectory.Document, subPath: '' });
-    form.setFieldsValue({ watchDir: currentWatchDir });
-  };
-
   const getStepStatus = (key) => {
     if (loading) return 'process';
     return initStatus[key] ? 'finish' : 'wait';
@@ -264,41 +258,39 @@ const SystemInit = () => {
     },
   ];
 
-  const FolderPathInput = React.memo(({ fieldKey, form, options }) => {
-    const handleSelectChange = useCallback((value) => {
-      const currentInput = form.getFieldValue(['watchDir', fieldKey, 'input']) || '';
-      const combined = `${value}${sep()}${currentInput}`;
-      form.setFieldsValue({
-        watchDir: {
-          [fieldKey]: {
-            select: value,
-            input: currentInput,
-            baseDir: options.find(option => option.path === value)?.baseDir
-          },
-        },
-      });
-    }, [form, fieldKey, options]);
+  // 修复：重构FolderPathInput组件，移除内部的form.setFieldsValue调用
+  const FolderPathInput = React.memo(({ value, onChange, options }) => {
+    // 将完整路径拆分为select和input两部分
+    const parsePath = (path) => {
+      if (!path) return { select: '', input: '' };
 
-    const handleInputChange = useCallback((e) => {
-      const currentSelect = form.getFieldValue(['watchDir', fieldKey, 'select']) ||
-        options.find(option => option.name === '文档目录')?.path;
-      const combined = `${currentSelect}${sep()}${e.target.value}`;
-      form.setFieldsValue({
-        watchDir: {
-          [fieldKey]: {
-            select: currentSelect,
-            input: e.target.value,
-            baseDir: options.find(option => option.path === currentSelect)?.baseDir
-          },
-        },
-      });
-    }, [form, fieldKey, options]);
+      // 查找匹配的基础路径
+      const matchedOption = options.find(option => path.startsWith(option.path));
+      if (matchedOption) {
+        const subPath = path.substring(matchedOption.path.length);
+        // 移除开头的路径分隔符
+        const cleanedSubPath = subPath.startsWith(sep()) ? subPath.substring(sep().length) : subPath;
+        return { select: matchedOption.path, input: cleanedSubPath };
+      }
 
-    // 从表单中获取当前字段的值
-    const currentFieldValue = form.getFieldValue(['watchDir', fieldKey]);
-    const selectValue = currentFieldValue?.select || options.find(option => option.name === '文档目录')?.path;
-    const inputValue = currentFieldValue?.input || '';
-    const combinedPath = `${selectValue}${sep()}${inputValue}`;
+      // 如果没有匹配的基础路径，则使用文档目录作为默认
+      const defaultOption = options.find(option => option.name === '文档目录');
+      return { select: defaultOption?.path || '', input: path };
+    };
+
+    const { select: selectValue, input: inputValue } = parsePath(value);
+    const combinedPath = value || '';
+
+    const handleSelectChange = (newSelect) => {
+      const newPath = newSelect + (inputValue ? sep() + inputValue : '');
+      onChange(newPath);
+    };
+
+    const handleInputChange = (e) => {
+      const newInput = e.target.value;
+      const newPath = selectValue + (newInput ? sep() + newInput : '');
+      onChange(newPath);
+    };
 
     return (
       <div>
@@ -343,6 +335,7 @@ const SystemInit = () => {
       )}
     </Card>
   ));
+
   const Step1Content = React.memo(({ showConfigForm, form, isMobileTauri, pathOptions }) => {
     const handleSelectFolder = useCallback(async (fieldKey) => {
       const folder = await open({
@@ -385,7 +378,17 @@ const SystemInit = () => {
                         </div>
                       ) : (
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <FolderPathInput fieldKey={fieldKey} form={form} options={pathOptions} />
+                          <FolderPathInput
+                            value={form.getFieldValue(['watchDir', fieldKey])}
+                            onChange={(newValue) => {
+                              form.setFieldsValue({
+                                watchDir: {
+                                  [fieldKey]: newValue
+                                }
+                              });
+                            }}
+                            options={pathOptions}
+                          />
                           <Button type="dashed" onClick={() => remove(name)}>删除</Button>
                         </div>
                       )}
@@ -396,7 +399,7 @@ const SystemInit = () => {
                       添加文件夹路径
                     </Button>
                   ) : (
-                    <Button type="dashed" onClick={() => add({ baseDir: BaseDirectory.Document, subPath: '' })} block>
+                    <Button type="dashed" onClick={() => add('')} block>
                       添加文件夹路径
                     </Button>
                   )}
@@ -514,7 +517,6 @@ const SystemInit = () => {
       <Title level={2} style={{ textAlign: 'center', marginBottom: 40 }}>
         系统初始化
       </Title>
-
 
       <Steps
         direction="vertical"
