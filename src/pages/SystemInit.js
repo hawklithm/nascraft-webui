@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useHistory } from 'react-router-dom';
 import { Card, Button, Steps, Typography, message, Result, Table, Form, Input, Select, FloatButton, Drawer, List, Progress, Badge } from 'antd';
 import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined, ExclamationCircleOutlined, CloudUploadOutlined } from '@ant-design/icons';
@@ -264,34 +264,8 @@ const SystemInit = () => {
     },
   ];
 
-  const FolderPathInput = ({ fieldKey, form, options }) => {
-    const [combinedPath, setCombinedPath] = useState('');
-
-    useEffect(() => {
-      const defaultOption = options.find(option => option.name === '文档目录');
-      if (defaultOption) {
-        const currentValues = form.getFieldValue(['watchDir', fieldKey]);
-        // 如果已经有值，则不再设置
-        if (currentValues && currentValues.select) {
-          return;
-        }
-
-        const currentInput = currentValues?.input || '';
-        const combined = `${defaultOption.path}${sep()}${currentInput}`;
-        form.setFieldsValue({
-          watchDir: {
-            [fieldKey]: {
-              select: defaultOption.path,
-              input: currentInput,
-              baseDir: defaultOption.baseDir
-            },
-          },
-        });
-        setCombinedPath(combined);
-      }
-    }, [options, fieldKey, form]);
-
-    const handleSelectChange = (value) => {
+  const FolderPathInput = React.memo(({ fieldKey, form, options }) => {
+    const handleSelectChange = useCallback((value) => {
       const currentInput = form.getFieldValue(['watchDir', fieldKey, 'input']) || '';
       const combined = `${value}${sep()}${currentInput}`;
       form.setFieldsValue({
@@ -303,11 +277,11 @@ const SystemInit = () => {
           },
         },
       });
-      setCombinedPath(combined);
-    };
+    }, [form, fieldKey, options]);
 
-    const handleInputChange = (e) => {
-      const currentSelect = form.getFieldValue(['watchDir', fieldKey, 'select']) || options.find(option => option.name === '文档目录')?.path;
+    const handleInputChange = useCallback((e) => {
+      const currentSelect = form.getFieldValue(['watchDir', fieldKey, 'select']) ||
+        options.find(option => option.name === '文档目录')?.path;
       const combined = `${currentSelect}${sep()}${e.target.value}`;
       form.setFieldsValue({
         watchDir: {
@@ -318,26 +292,13 @@ const SystemInit = () => {
           },
         },
       });
-      setCombinedPath(combined);
-    };
+    }, [form, fieldKey, options]);
 
-    useEffect(() => {
-      const defaultOption = options.find(option => option.name === '文档目录');
-      if (defaultOption) {
-        const currentInput = form.getFieldValue(['watchDir', fieldKey, 'input']) || '';
-        const combined = `${defaultOption.path}${sep()}${currentInput}`;
-        form.setFieldsValue({
-          watchDir: {
-            [fieldKey]: {
-              select: defaultOption.path,
-              input: currentInput,
-              baseDir: defaultOption.baseDir
-            },
-          },
-        });
-        setCombinedPath(combined);
-      }
-    }, [options, fieldKey, form]);
+    // 从表单中获取当前字段的值
+    const currentFieldValue = form.getFieldValue(['watchDir', fieldKey]);
+    const selectValue = currentFieldValue?.select || options.find(option => option.name === '文档目录')?.path;
+    const inputValue = currentFieldValue?.input || '';
+    const combinedPath = `${selectValue}${sep()}${inputValue}`;
 
     return (
       <div>
@@ -346,16 +307,19 @@ const SystemInit = () => {
             style={{ width: '30%' }}
             onChange={handleSelectChange}
             placeholder="选择路径"
-            defaultValue={options.find(option => option.name === '文档目录')?.path}
+            value={selectValue}
           >
-            {options.map((option, index) => (
-              <Select.Option key={option.name} value={option.path}>{option.name}</Select.Option>
+            {options.map((option) => (
+              <Select.Option key={option.name} value={option.path}>
+                {option.name}
+              </Select.Option>
             ))}
           </Select>
           <Input
             style={{ width: '70%' }}
             placeholder="输入路径"
             onChange={handleInputChange}
+            value={inputValue}
           />
         </Input.Group>
         <div style={{ marginTop: 8 }}>
@@ -363,7 +327,7 @@ const SystemInit = () => {
         </div>
       </div>
     );
-  };
+  });
 
   const Step0Content = React.memo(({ errorData }) => (
     <Card>
@@ -379,88 +343,106 @@ const SystemInit = () => {
       )}
     </Card>
   ));
-  const Step1Content = React.memo(({ showConfigForm, form, isMobileTauri, pathOptions, handleSelectFolder, handleAddMobileWatchDir }) => (
-    <Card>
-      <Title level={4}>配置文件检查</Title>
-      {showConfigForm && (
-        <Form form={form} layout="vertical">
-          <Form.List name="watchDir">
-            {(fields, { add, remove }) => (
-              <div>
-                {fields.map(({ key, name, fieldKey, ...restField }) => (
-                  <Form.Item
-                    {...restField}
-                    name={[name]}
-                    label={`配置需要同步的文件夹路径`}
-                    rules={[{ required: true, message: '请选择文件夹路径' }]}
-                  >
-                    {!isMobileTauri ? (
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <Input
-                          readOnly
-                          placeholder="请选择需要监听的文件夹"
-                          value={form.getFieldValue(['watchDir', fieldKey])}
-                          style={{ flex: 1 }}
-                        />
-                        <Button onClick={() => handleSelectFolder(fieldKey)}>选择</Button>
-                        <Button type="dashed" onClick={() => remove(name)}>删除</Button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <FolderPathInput fieldKey={fieldKey} form={form} options={pathOptions} />
-                        <Button type="dashed" onClick={() => remove(name)}>删除</Button>
-                      </div>
-                    )}
-                  </Form.Item>
-                ))}
-                {!isMobileTauri ? (
-                  <Button type="dashed" onClick={() => add()} block>添加文件夹路径</Button>
-                ) : (
-                  <Button type="dashed" onClick={handleAddMobileWatchDir} block>添加文件夹路径</Button>
-                )}
-              </div>
-            )}
-          </Form.List>
-          <Form.Item
-            name="interval"
-            label="检查间隔时间"
-            rules={[{ required: true, message: '请选择检查间隔时间' }]}
-          >
-            <Select style={{ width: '100%' }}>
-              <Select.Option value={1}>高性能（1秒）</Select.Option>
-              <Select.Option value={60}>平衡（60秒）</Select.Option>
-              <Select.Option value={300}>节能（300秒）</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="host"
-            label="配置后端服务地址"
-            rules={[{ required: true, message: '请检查服务地址' }]}
-          >
-            <Input
-              style={{ width: '70%' }}
-              placeholder="输入服务地址"
-            />
-          </Form.Item>
-        </Form>
-      )}
-    </Card>
-  ));
+  const Step1Content = React.memo(({ showConfigForm, form, isMobileTauri, pathOptions }) => {
+    const handleSelectFolder = useCallback(async (fieldKey) => {
+      const folder = await open({
+        multiple: false,
+        directory: true,
+      });
+      if (folder) {
+        const currentWatchDir = form.getFieldValue('watchDir') || [];
+        currentWatchDir[fieldKey] = folder;
+        form.setFieldsValue({ watchDir: currentWatchDir });
+      }
+    }, [form]);
+
+    return (
+      <Card>
+        <Title level={4}>配置文件检查</Title>
+        {showConfigForm && (
+          <Form form={form} layout="vertical">
+            <Form.List name="watchDir">
+              {(fields, { add, remove }) => (
+                <div>
+                  {fields.map(({ key, name, fieldKey, ...restField }) => (
+                    <Form.Item
+                      {...restField}
+                      name={[name]}
+                      label={`配置需要同步的文件夹路径`}
+                      rules={[{ required: true, message: '请选择文件夹路径' }]}
+                      key={key}
+                    >
+                      {!isMobileTauri ? (
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <Input
+                            readOnly
+                            placeholder="请选择需要监听的文件夹"
+                            value={form.getFieldValue(['watchDir', fieldKey])}
+                            style={{ flex: 1 }}
+                          />
+                          <Button onClick={() => handleSelectFolder(fieldKey)}>选择</Button>
+                          <Button type="dashed" onClick={() => remove(name)}>删除</Button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <FolderPathInput fieldKey={fieldKey} form={form} options={pathOptions} />
+                          <Button type="dashed" onClick={() => remove(name)}>删除</Button>
+                        </div>
+                      )}
+                    </Form.Item>
+                  ))}
+                  {!isMobileTauri ? (
+                    <Button type="dashed" onClick={() => add('')} block>
+                      添加文件夹路径
+                    </Button>
+                  ) : (
+                    <Button type="dashed" onClick={() => add({ baseDir: BaseDirectory.Document, subPath: '' })} block>
+                      添加文件夹路径
+                    </Button>
+                  )}
+                </div>
+              )}
+            </Form.List>
+            <Form.Item
+              name="interval"
+              label="检查间隔时间"
+              rules={[{ required: true, message: '请选择检查间隔时间' }]}
+            >
+              <Select style={{ width: '100%' }}>
+                <Select.Option value={1}>高性能（1秒）</Select.Option>
+                <Select.Option value={60}>平衡（60秒）</Select.Option>
+                <Select.Option value={300}>节能（300秒）</Select.Option>
+              </Select>
+            </Form.Item>
+            <Form.Item
+              name="host"
+              label="配置后端服务地址"
+              rules={[{ required: true, message: '请检查服务地址' }]}
+            >
+              <Input
+                style={{ width: '70%' }}
+                placeholder="输入服务地址"
+              />
+            </Form.Item>
+          </Form>
+        )}
+      </Card>
+    );
+  });
 
   const renderStepContent = (step) => {
     switch (step) {
       case 0:
         return <Step0Content errorData={errorData} />;
-
       case 1:
-        return <Step1Content
-          showConfigForm={showConfigForm}
-          form={form}
-          isMobileTauri={isMobileTauri}
-          pathOptions={pathOptions}
-          handleSelectFolder={handleSelectFolder}
-          handleAddMobileWatchDir={handleAddMobileWatchDir}
-        />;
+        return (
+          <Step1Content
+            showConfigForm={showConfigForm}
+            form={form}
+            isMobileTauri={isMobileTauri}
+            pathOptions={pathOptions}
+          />
+        );
       default:
         return null;
     }
@@ -621,4 +603,4 @@ export const checkSysConf = async () => {
   }
 };
 
-export default SystemInit; 
+export default SystemInit;
