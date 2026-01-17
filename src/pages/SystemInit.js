@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useHistory } from 'react-router-dom';
 import { Card, Button, Steps, Typography, message, Result, Table, Form, Input, Select, FloatButton, Drawer, List, Progress, Badge } from 'antd';
 import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined, ExclamationCircleOutlined, CloudUploadOutlined } from '@ant-design/icons';
-import { apiFetch } from '../utils/apiFetch';
 import { isTauriRuntime } from '../utils/apiFetch';
-import {readTextFile,mkdir, exists, BaseDirectory,writeTextFile } from '@tauri-apps/plugin-fs';
+import { readTextFile, mkdir, exists, BaseDirectory, writeTextFile } from '@tauri-apps/plugin-fs';
 import * as path from '@tauri-apps/api/path';
 import { platform } from '@tauri-apps/plugin-os';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -38,6 +37,8 @@ const SystemInit = () => {
   useEffect(() => {
     (async () => {
       const isTauri = await isTauriRuntime();
+      setIsMobileTauri(true);
+      return;
       if (!isTauri) {
         setIsMobileTauri(false);
         return;
@@ -80,7 +81,7 @@ const SystemInit = () => {
     });
   }, []);
 
-  const prefillFormFromSysConf = async () => {
+  const prefillFormFromSysConf = useCallback(async () => {
     const sysConfContent = await readTextFile(sysConfName, { baseDir: BaseDirectory.AppConfig });
     const sysConfJson = JSON.parse(sysConfContent);
 
@@ -93,7 +94,7 @@ const SystemInit = () => {
       interval,
       host,
     });
-  };
+  }, [form]);
 
   useEffect(() => {
     if (!reconfigMode) return;
@@ -105,7 +106,7 @@ const SystemInit = () => {
         console.log('prefill sys.conf failed', e);
       }
     })();
-  }, [reconfigMode, pathOptions]);
+  }, [reconfigMode, pathOptions, prefillFormFromSysConf]);
 
   const writeConfigFromFormValues = async (values) => {
     const isTauri = await isTauriRuntime();
@@ -263,117 +264,203 @@ const SystemInit = () => {
     },
   ];
 
+  const FolderPathInput = ({ fieldKey, form, options }) => {
+    const [combinedPath, setCombinedPath] = useState('');
+
+    useEffect(() => {
+      const defaultOption = options.find(option => option.name === '文档目录');
+      if (defaultOption) {
+        const currentValues = form.getFieldValue(['watchDir', fieldKey]);
+        // 如果已经有值，则不再设置
+        if (currentValues && currentValues.select) {
+          return;
+        }
+
+        const currentInput = currentValues?.input || '';
+        const combined = `${defaultOption.path}${sep()}${currentInput}`;
+        form.setFieldsValue({
+          watchDir: {
+            [fieldKey]: {
+              select: defaultOption.path,
+              input: currentInput,
+              baseDir: defaultOption.baseDir
+            },
+          },
+        });
+        setCombinedPath(combined);
+      }
+    }, [options, fieldKey, form]);
+
+    const handleSelectChange = (value) => {
+      const currentInput = form.getFieldValue(['watchDir', fieldKey, 'input']) || '';
+      const combined = `${value}${sep()}${currentInput}`;
+      form.setFieldsValue({
+        watchDir: {
+          [fieldKey]: {
+            select: value,
+            input: currentInput,
+            baseDir: options.find(option => option.path === value)?.baseDir
+          },
+        },
+      });
+      setCombinedPath(combined);
+    };
+
+    const handleInputChange = (e) => {
+      const currentSelect = form.getFieldValue(['watchDir', fieldKey, 'select']) || options.find(option => option.name === '文档目录')?.path;
+      const combined = `${currentSelect}${sep()}${e.target.value}`;
+      form.setFieldsValue({
+        watchDir: {
+          [fieldKey]: {
+            select: currentSelect,
+            input: e.target.value,
+            baseDir: options.find(option => option.path === currentSelect)?.baseDir
+          },
+        },
+      });
+      setCombinedPath(combined);
+    };
+
+    useEffect(() => {
+      const defaultOption = options.find(option => option.name === '文档目录');
+      if (defaultOption) {
+        const currentInput = form.getFieldValue(['watchDir', fieldKey, 'input']) || '';
+        const combined = `${defaultOption.path}${sep()}${currentInput}`;
+        form.setFieldsValue({
+          watchDir: {
+            [fieldKey]: {
+              select: defaultOption.path,
+              input: currentInput,
+              baseDir: defaultOption.baseDir
+            },
+          },
+        });
+        setCombinedPath(combined);
+      }
+    }, [options, fieldKey, form]);
+
+    return (
+      <div>
+        <Input.Group compact>
+          <Select
+            style={{ width: '30%' }}
+            onChange={handleSelectChange}
+            placeholder="选择路径"
+            defaultValue={options.find(option => option.name === '文档目录')?.path}
+          >
+            {options.map((option, index) => (
+              <Select.Option key={option.name} value={option.path}>{option.name}</Select.Option>
+            ))}
+          </Select>
+          <Input
+            style={{ width: '70%' }}
+            placeholder="输入路径"
+            onChange={handleInputChange}
+          />
+        </Input.Group>
+        <div style={{ marginTop: 8 }}>
+          <Typography.Text type="secondary">完整路径: {combinedPath}</Typography.Text>
+        </div>
+      </div>
+    );
+  };
+
+  const Step0Content = React.memo(({ errorData }) => (
+    <Card>
+      <Title level={4}>系统初始化</Title>
+      <p>初始化系统配置</p>
+      {errorData.length > 0 && (
+        <Table
+          dataSource={errorData.map((error, index) => ({ key: index, error }))}
+          columns={columns}
+          pagination={false}
+          style={{ marginTop: 16, backgroundColor: '#fff5f5', border: '1px solid #ffccc7' }}
+        />
+      )}
+    </Card>
+  ));
+  const Step1Content = React.memo(({ showConfigForm, form, isMobileTauri, pathOptions, handleSelectFolder, handleAddMobileWatchDir }) => (
+    <Card>
+      <Title level={4}>配置文件检查</Title>
+      {showConfigForm && (
+        <Form form={form} layout="vertical">
+          <Form.List name="watchDir">
+            {(fields, { add, remove }) => (
+              <div>
+                {fields.map(({ key, name, fieldKey, ...restField }) => (
+                  <Form.Item
+                    {...restField}
+                    name={[name]}
+                    label={`配置需要同步的文件夹路径`}
+                    rules={[{ required: true, message: '请选择文件夹路径' }]}
+                  >
+                    {!isMobileTauri ? (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <Input
+                          readOnly
+                          placeholder="请选择需要监听的文件夹"
+                          value={form.getFieldValue(['watchDir', fieldKey])}
+                          style={{ flex: 1 }}
+                        />
+                        <Button onClick={() => handleSelectFolder(fieldKey)}>选择</Button>
+                        <Button type="dashed" onClick={() => remove(name)}>删除</Button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <FolderPathInput fieldKey={fieldKey} form={form} options={pathOptions} />
+                        <Button type="dashed" onClick={() => remove(name)}>删除</Button>
+                      </div>
+                    )}
+                  </Form.Item>
+                ))}
+                {!isMobileTauri ? (
+                  <Button type="dashed" onClick={() => add()} block>添加文件夹路径</Button>
+                ) : (
+                  <Button type="dashed" onClick={handleAddMobileWatchDir} block>添加文件夹路径</Button>
+                )}
+              </div>
+            )}
+          </Form.List>
+          <Form.Item
+            name="interval"
+            label="检查间隔时间"
+            rules={[{ required: true, message: '请选择检查间隔时间' }]}
+          >
+            <Select style={{ width: '100%' }}>
+              <Select.Option value={1}>高性能（1秒）</Select.Option>
+              <Select.Option value={60}>平衡（60秒）</Select.Option>
+              <Select.Option value={300}>节能（300秒）</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="host"
+            label="配置后端服务地址"
+            rules={[{ required: true, message: '请检查服务地址' }]}
+          >
+            <Input
+              style={{ width: '70%' }}
+              placeholder="输入服务地址"
+            />
+          </Form.Item>
+        </Form>
+      )}
+    </Card>
+  ));
+
   const renderStepContent = (step) => {
     switch (step) {
       case 0:
-        return (
-          <Card>
-            <Title level={4}>系统初始化</Title>
-            <p>初始化系统配置</p>
-            {errorData.length > 0 && (
-              <Table
-                dataSource={errorData.map((error, index) => ({ key: index, error }))}
-                columns={columns}
-                pagination={false}
-                style={{ marginTop: 16, backgroundColor: '#fff5f5', border: '1px solid #ffccc7' }}
-              />
-            )}
-          </Card>
-        );
+        return <Step0Content errorData={errorData} />;
+
       case 1:
-        return (
-          <Card>
-            <Title level={4}>配置文件检查</Title>
-            {showConfigForm && (
-              <Form form={form} layout="vertical">
-                <Form.List name="watchDir">
-                  {(fields, { add, remove }) => (
-                    <div>
-                      {fields.map(({ key, name, fieldKey, ...restField }) => (
-                        <Form.Item
-                          {...restField}
-                          name={[name]}
-                          label={`配置需要同步的文件夹路径`}
-                          rules={[{ required: true, message: '请选择文件夹路径' }]}
-                        >
-                          {!isMobileTauri ? (
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <Input
-                                readOnly
-                                placeholder="请选择需要监听的文件夹"
-                                value={form.getFieldValue(['watchDir', fieldKey])}
-                                style={{ flex: 1 }}
-                              />
-                              <Button onClick={() => handleSelectFolder(fieldKey)}>选择</Button>
-                              <Button type="dashed" onClick={() => remove(name)}>删除</Button>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                              <Select
-                                style={{ minWidth: 140 }}
-                                value={(form.getFieldValue(['watchDir', fieldKey]) || {}).baseDir}
-                                onChange={(v) => {
-                                  const cur = form.getFieldValue('watchDir') || [];
-                                  const item = cur[fieldKey] || {};
-                                  cur[fieldKey] = { ...item, baseDir: v };
-                                  form.setFieldsValue({ watchDir: cur });
-                                }}
-                              >
-                                {pathOptions.map((opt) => (
-                                  <Select.Option key={String(opt.baseDir)} value={opt.baseDir}>
-                                    {opt.name}
-                                  </Select.Option>
-                                ))}
-                              </Select>
-                              <Input
-                                placeholder="填写子路径（相对于上面的目录）"
-                                style={{ flex: 1, minWidth: 180 }}
-                                value={(form.getFieldValue(['watchDir', fieldKey]) || {}).subPath || ''}
-                                onChange={(e) => {
-                                  const cur = form.getFieldValue('watchDir') || [];
-                                  const item = cur[fieldKey] || {};
-                                  cur[fieldKey] = { ...item, subPath: e.target.value };
-                                  form.setFieldsValue({ watchDir: cur });
-                                }}
-                              />
-                              <Button type="dashed" onClick={() => remove(name)}>删除</Button>
-                            </div>
-                          )}
-                        </Form.Item>
-                      ))}
-                      {!isMobileTauri ? (
-                        <Button type="dashed" onClick={() => add()} block>添加文件夹路径</Button>
-                      ) : (
-                        <Button type="dashed" onClick={handleAddMobileWatchDir} block>添加文件夹路径</Button>
-                      )}
-                    </div>
-                  )}
-                </Form.List>
-                <Form.Item
-                  name="interval"
-                  label="检查间隔时间"
-                  rules={[{ required: true, message: '请选择检查间隔时间' }]}
-                >
-                  <Select style={{ width: '100%' }}>
-                    <Select.Option value={1}>高性能（1秒）</Select.Option>
-                    <Select.Option value={60}>平衡（60秒）</Select.Option>
-                    <Select.Option value={300}>节能（300秒）</Select.Option>
-                  </Select>
-                </Form.Item>
-                <Form.Item
-                  name="host"
-                  label="配置后端服务地址"
-                  rules={[{ required: true, message: '请检查服务地址' }]}
-                >
-                  <Input
-                    style={{ width: '70%' }}
-                    placeholder="输入服务地址"
-                  />
-                </Form.Item>
-              </Form>
-            )}
-          </Card>
-        );
+        return <Step1Content
+          showConfigForm={showConfigForm}
+          form={form}
+          isMobileTauri={isMobileTauri}
+          pathOptions={pathOptions}
+          handleSelectFolder={handleSelectFolder}
+          handleAddMobileWatchDir={handleAddMobileWatchDir}
+        />;
       default:
         return null;
     }
@@ -414,9 +501,9 @@ const SystemInit = () => {
             title="系统已完成初始化"
             subTitle="您可以开始使用所有功能"
             extra={[
-              <Button 
-                type="primary" 
-                key="console" 
+              <Button
+                type="primary"
+                key="console"
                 onClick={() => history.push('/welcome')}
               >
                 返回首页
@@ -452,13 +539,13 @@ const SystemInit = () => {
         current={Object.values(initStatus).filter(Boolean).length}
         style={{ maxWidth: 600, margin: '0 auto 40px' }}
       >
-        <Step 
+        <Step
           title="数据库初始化"
           status={getStepStatus('database')}
           icon={getStepIcon('database')}
           description={renderStepContent(0)}
         />
-        <Step 
+        <Step
           title="配置文件检查"
           status={getStepStatus('config')}
           icon={getStepIcon('config')}
@@ -467,8 +554,8 @@ const SystemInit = () => {
       </Steps>
 
       <div style={{ textAlign: 'center' }}>
-        <Button 
-          type="primary" 
+        <Button
+          type="primary"
           size="large"
           onClick={handleInitialize}
           loading={loading}
@@ -515,23 +602,23 @@ const SystemInit = () => {
 };
 
 export const checkSysConf = async () => {
-    const sysConfExists = await exists(sysConfName, { baseDir: BaseDirectory.AppConfig });
-    const appConfigDir = await path.appConfigDir();
-      console.log("appConfigDir=", appConfigDir);
-    if (sysConfExists) {
-      const sysConfContent = await readTextFile(sysConfName, { baseDir: BaseDirectory.AppConfig });
-      try {
-        const sysConfJson = JSON.parse(sysConfContent);
-        if (!Array.isArray(sysConfJson.watchDir) || typeof sysConfJson.interval !== 'number') {
-          throw new Error('sys.conf file is missing required fields');
-        }
-        return true;
-      } catch (e) {
-        throw new Error('sys.conf file is not valid JSON');
+  const sysConfExists = await exists(sysConfName, { baseDir: BaseDirectory.AppConfig });
+  const appConfigDir = await path.appConfigDir();
+  console.log("appConfigDir=", appConfigDir);
+  if (sysConfExists) {
+    const sysConfContent = await readTextFile(sysConfName, { baseDir: BaseDirectory.AppConfig });
+    try {
+      const sysConfJson = JSON.parse(sysConfContent);
+      if (!Array.isArray(sysConfJson.watchDir) || typeof sysConfJson.interval !== 'number') {
+        throw new Error('sys.conf file is missing required fields');
       }
-    } else {
-      throw new Error('sys.conf file need initialization');
+      return true;
+    } catch (e) {
+      throw new Error('sys.conf file is not valid JSON');
     }
-  };
+  } else {
+    throw new Error('sys.conf file need initialization');
+  }
+};
 
 export default SystemInit; 

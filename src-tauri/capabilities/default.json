@@ -2,9 +2,12 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "enables the default permissions",
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:app:default",
+    "core:path:default",
+    "core:path:allow-resolve-directory",
     "os:default",
     "dialog:default",
     "dialog:allow-open",
@@ -18,7 +21,19 @@
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
         { "path": "$APPCACHE/**" },
-        { "path": "$HOME_DIR/**" }
+        { "path": "$HOME_DIR/**" },
+        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOG/**" },
+        { "path": "$APPCACHE/**" },
+        { "path": "$HOME_DIR/**" },
+        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
       ]
     },
     {
@@ -28,7 +43,8 @@
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
         { "path": "$APPCACHE/**" },
-        { "path": "$HOME_DIR/**" }
+        { "path": "$HOME_DIR/**" },
+        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
       ]
     },
     {
@@ -38,17 +54,8 @@
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
         { "path": "$APPCACHE/**" },
-        { "path": "$HOME_DIR/**" }
-      ]
-    },
-    {
-      "identifier": "fs:allow-stat",
-      "allow": [
-        { "path": "$APPCONFIG/**" },
-        { "path": "$APPDATA/**" },
-        { "path": "$APPLOG/**" },
-        { "path": "$APPCACHE/**" },
-        { "path": "$HOME_DIR/**" }
+        { "path": "$HOME_DIR/**" },
+        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
       ]
     },
     {
@@ -57,7 +64,8 @@
         { "path": "$APPCONFIG/**" },
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
-        { "path": "$APPCACHE/**" }
+        { "path": "$APPCACHE/**" },
+        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
       ]
     },
     {
@@ -66,7 +74,8 @@
         { "path": "$APPCONFIG/**" },
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
-        { "path": "$APPCACHE/**" }
+        { "path": "$APPCACHE/**" },
+        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
       ]
     },
     {
@@ -74,7 +83,8 @@
       "allow": [
         { "path": "$APPCONFIG/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$HOME_DIR/**" }
+        { "path": "$HOME_DIR/**" },
+        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
       ]
     },
     "fs:allow-unwatch"
