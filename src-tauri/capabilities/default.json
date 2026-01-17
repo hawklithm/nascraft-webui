@@ -21,8 +21,7 @@
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
         { "path": "$APPCACHE/**" },
-        { "path": "$HOME_DIR/**" },
-        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
+        { "path": "$HOME_DIR/**" }
       ]
     },
     {
@@ -32,8 +31,7 @@
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
         { "path": "$APPCACHE/**" },
-        { "path": "$HOME_DIR/**" },
-        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
+        { "path": "$HOME_DIR/**" }
       ]
     },
     {
@@ -43,8 +41,7 @@
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
         { "path": "$APPCACHE/**" },
-        { "path": "$HOME_DIR/**" },
-        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
+        { "path": "$HOME_DIR/**" }
       ]
     },
     {
@@ -54,8 +51,7 @@
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
         { "path": "$APPCACHE/**" },
-        { "path": "$HOME_DIR/**" },
-        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
+        { "path": "$HOME_DIR/**" }
       ]
     },
     {
@@ -64,8 +60,7 @@
         { "path": "$APPCONFIG/**" },
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
-        { "path": "$APPCACHE/**" },
-        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
+        { "path": "$APPCACHE/**" }
       ]
     },
     {
@@ -74,8 +69,16 @@
         { "path": "$APPCONFIG/**" },
         { "path": "$APPDATA/**" },
         { "path": "$APPLOG/**" },
-        { "path": "$APPCACHE/**" },
-        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
+        { "path": "$APPCACHE/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOG/**" },
+        { "path": "$APPCACHE/**" }
       ]
     },
     {
@@ -83,8 +86,7 @@
       "allow": [
         { "path": "$APPCONFIG/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$HOME_DIR/**" },
-        { "path": "$APPDATA/org.hawklithm.nascraft/**" }
+        { "path": "$HOME_DIR/**" }
       ]
     },
     "fs:allow-unwatch"

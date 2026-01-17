@@ -37,8 +37,6 @@ const SystemInit = () => {
   useEffect(() => {
     (async () => {
       const isTauri = await isTauriRuntime();
-      setIsMobileTauri(true);
-      return;
       if (!isTauri) {
         setIsMobileTauri(false);
         return;
@@ -136,14 +134,6 @@ const SystemInit = () => {
       host: values.host,
     };
 
-    const dir_exists = await exists('', {
-      baseDir: BaseDirectory.AppConfig,
-    });
-    if (!dir_exists) {
-      await mkdir('', {
-        baseDir: BaseDirectory.AppConfig,
-      });
-    }
     await writeTextFile(sysConfName, JSON.stringify(newConfig, null, 2), { baseDir: BaseDirectory.AppConfig });
     return true;
   };
@@ -587,8 +577,6 @@ const SystemInit = () => {
 
 export const checkSysConf = async () => {
   const sysConfExists = await exists(sysConfName, { baseDir: BaseDirectory.AppConfig });
-  const appConfigDir = await path.appConfigDir();
-  console.log("appConfigDir=", appConfigDir);
   if (sysConfExists) {
     const sysConfContent = await readTextFile(sysConfName, { baseDir: BaseDirectory.AppConfig });
     try {
