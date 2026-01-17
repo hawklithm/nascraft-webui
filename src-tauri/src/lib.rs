@@ -1,11 +1,12 @@
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use notify::{recommended_watcher, Config, RecursiveMode, Watcher};
 use std::{sync::mpsc::channel, time::Duration};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use log::{info, warn};
 use std::sync::{Mutex, OnceLock};
 use notify::event::EventKind;
+use std::path::{Path, PathBuf};
+use std::io::{Read, Seek, SeekFrom, Write};
 
 #[derive(Debug, Deserialize)]
 struct HttpProxyRequest {
@@ -13,6 +14,172 @@ struct HttpProxyRequest {
   method: Option<String>,
   headers: Option<HashMap<String, String>>,
   body: Option<Vec<u8>>,
+}
+
+const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
+
+static APP_LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
+static FILE_LOGGER: OnceLock<FileLogger> = OnceLock::new();
+
+macro_rules! file_log {
+  ($lvl:expr, $($arg:tt)*) => {{
+    let ts_ms = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .map(|d| d.as_millis())
+      .unwrap_or(0);
+    let line = format!("{} [{}] {}", ts_ms, $lvl, format!($($arg)*));
+    if let Some(l) = FILE_LOGGER.get() {
+      let _ = l.append_line(&line);
+    }
+  }};
+}
+
+macro_rules! file_info {
+  ($($arg:tt)*) => { file_log!("INFO", $($arg)*); };
+}
+
+macro_rules! file_warn {
+  ($($arg:tt)*) => { file_log!("WARN", $($arg)*); };
+}
+
+macro_rules! file_error {
+  ($($arg:tt)*) => { file_log!("ERROR", $($arg)*); };
+}
+
+struct FileLogger {
+  path: PathBuf,
+  lock: Mutex<()>,
+}
+
+impl FileLogger {
+  fn new(path: PathBuf) -> Self {
+    Self {
+      path,
+      lock: Mutex::new(()),
+    }
+  }
+
+  fn ensure_parent_dir(path: &Path) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+      std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create log dir: {}", e))?;
+    }
+    Ok(())
+  }
+
+  fn truncate_if_needed_locked(&self, incoming_len: u64) -> Result<(), String> {
+    let cur_len = match std::fs::metadata(&self.path) {
+      Ok(m) => m.len(),
+      Err(_) => 0,
+    };
+
+    if cur_len + incoming_len <= MAX_LOG_BYTES {
+      return Ok(());
+    }
+    let _ = std::fs::OpenOptions::new()
+      .create(true)
+      .write(true)
+      .truncate(true)
+      .open(&self.path);
+    Ok(())
+  }
+
+  fn append_line(&self, line: &str) -> Result<(), String> {
+    let _g = self.lock.lock().map_err(|_| "log lock poisoned".to_string())?;
+    Self::ensure_parent_dir(&self.path)?;
+    self.truncate_if_needed_locked(line.as_bytes().len() as u64)?;
+
+    let mut f = std::fs::OpenOptions::new()
+      .create(true)
+      .append(true)
+      .open(&self.path)
+      .map_err(|e| format!("Failed to open log file: {}", e))?;
+
+    f.write_all(line.as_bytes())
+      .and_then(|_| f.write_all(b"\n"))
+      .map_err(|e| format!("Failed to write log file: {}", e))?;
+    Ok(())
+  }
+}
+
+impl log::Log for FileLogger {
+  fn enabled(&self, _metadata: &log::Metadata) -> bool {
+    true
+  }
+
+  fn log(&self, record: &log::Record) {
+    if !self.enabled(record.metadata()) {
+      return;
+    }
+    let ts_ms = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .map(|d| d.as_millis())
+      .unwrap_or(0);
+    let line = format!("{} [{}] {}", ts_ms, record.level(), record.args());
+    let _ = self.append_line(&line);
+  }
+
+  fn flush(&self) {}
+}
+
+#[derive(Debug, Deserialize)]
+struct WebLogPayload {
+  level: String,
+  message: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AppLogInfo {
+  log_file: String,
+}
+
+fn get_logger() -> Result<&'static FileLogger, String> {
+  FILE_LOGGER.get().ok_or_else(|| "logger not initialized".to_string())
+}
+
+#[tauri::command]
+fn get_app_log_info() -> Result<AppLogInfo, String> {
+  let p = APP_LOG_PATH
+    .get()
+    .ok_or_else(|| "log path not initialized".to_string())?;
+  Ok(AppLogInfo {
+    log_file: p.display().to_string(),
+  })
+}
+
+#[tauri::command]
+fn append_web_log(payload: WebLogPayload) -> Result<(), String> {
+  let ts_ms = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map(|d| d.as_millis())
+    .unwrap_or(0);
+  let line = format!("{} [WEB:{}] {}", ts_ms, payload.level, payload.message);
+  get_logger()?.append_line(&line)
+}
+
+#[tauri::command]
+fn read_app_log(max_bytes: Option<u64>) -> Result<String, String> {
+  let max_bytes = max_bytes.unwrap_or(512 * 1024).min(MAX_LOG_BYTES);
+  let p = APP_LOG_PATH
+    .get()
+    .ok_or_else(|| "log path not initialized".to_string())?;
+
+  let mut f = std::fs::OpenOptions::new()
+    .read(true)
+    .open(p)
+    .map_err(|e| format!("Failed to open log file: {}", e))?;
+  let len = f
+    .metadata()
+    .map(|m| m.len())
+    .unwrap_or(0);
+
+  let start = if len > max_bytes { len - max_bytes } else { 0 };
+  f.seek(SeekFrom::Start(start))
+    .map_err(|e| format!("Failed to seek log file: {}", e))?;
+
+  let mut buf = Vec::new();
+  f.read_to_end(&mut buf)
+    .map_err(|e| format!("Failed to read log file: {}", e))?;
+  Ok(String::from_utf8_lossy(&buf).to_string())
 }
 
 #[cfg(not(mobile))]
@@ -48,7 +215,7 @@ fn update_desktop_watch_dirs(app: tauri::AppHandle, watch_dirs: Vec<String>) -> 
       let event = match res {
         Ok(e) => e,
         Err(e) => {
-          info!("desktop watcher error: {}", e);
+          file_info!("desktop watcher error: {}", e);
           return;
         }
       };
@@ -101,7 +268,7 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
 
   let mdns = ServiceDaemon::new().map_err(|e| e.to_string())?;
   let receiver = mdns.browse(service_type).map_err(|e| e.to_string())?;
-  info!("mDNS discovery started: service_type={}, timeout_ms={}", service_type, timeout_ms);
+  file_info!("mDNS discovery started: service_type={}, timeout_ms={}", service_type, timeout_ms);
 
   let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
   let mut out: Vec<MdnsDiscoveredServer> = Vec::new();
@@ -150,16 +317,16 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
           port: resolved.get_port(),
         });
 
-        info!("mDNS service resolved: fullname={}", resolved.get_fullname());
+        file_info!("mDNS service resolved: fullname={}", resolved.get_fullname());
       }
       Ok(_other) => {}
       Err(e) => {
-        info!("mDNS discovery recv_timeout error: {}", e);
+        file_info!("mDNS discovery recv_timeout error: {}", e);
       }
     }
   }
 
-  info!("mDNS discovery finished: services_found={}", out.len());
+  file_info!("mDNS discovery finished: services_found={}", out.len());
   let _ = mdns.shutdown();
   Ok(out)
 }
@@ -190,7 +357,7 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
   let discovery_port: u16 = 53530;
   let service_type = "_nascraft._udp.local.";
 
-  info!(
+  file_info!(
     "UDP discovery started (mobile): broadcast_port={}, timeout_ms={}",
     discovery_port, timeout_ms
   );
@@ -208,10 +375,10 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
   let broadcast_addr = format!("255.255.255.255:{}", discovery_port);
   match sock.send_to(&payload, &broadcast_addr).await {
     Ok(n) => {
-      info!("UDP discovery probe sent: addr={}, bytes={}", broadcast_addr, n);
+      file_info!("UDP discovery probe sent: addr={}, bytes={}", broadcast_addr, n);
     }
     Err(e) => {
-      info!("UDP discovery probe send failed: addr={}, err={}", broadcast_addr, e);
+      file_info!("UDP discovery probe send failed: addr={}, err={}", broadcast_addr, e);
     }
   }
 
@@ -230,7 +397,7 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
         let resp = match resp {
           Ok(r) => r,
           Err(e) => {
-            info!("UDP discovery: ignoring invalid JSON from {}: {}", peer, e);
+            file_info!("UDP discovery: ignoring invalid JSON from {}: {}", peer, e);
             continue;
           }
         };
@@ -255,16 +422,16 @@ async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsD
           port,
         });
 
-        info!("UDP discovery response accepted: peer={}", peer);
+        file_info!("UDP discovery response accepted: peer={}", peer);
       }
       Ok(Err(_e)) => {}
       Err(_elapsed) => {}
     }
   }
 
-  info!("UDP discovery finished (mobile): services_found={}", out.len());
+  file_info!("UDP discovery finished (mobile): services_found={}", out.len());
   if out.is_empty() {
-    info!("UDP discovery finished (mobile): no services discovered");
+    file_info!("UDP discovery finished (mobile): no services discovered");
   }
 
   Ok(out)
@@ -338,15 +505,34 @@ pub fn run() {
   .plugin(tauri_plugin_os::init())
   .plugin(tauri_plugin_dialog::init())
   .plugin(tauri_plugin_http::init())
-    .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services, update_desktop_watch_dirs, read_desktop_file_bytes])
+    .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services, update_desktop_watch_dirs, read_desktop_file_bytes,
+      get_app_log_info,
+      read_app_log,
+      append_web_log
+    ])
     .setup(|app| {
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
+      let log_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app_data_dir: {}", e))?
+        .join("logs");
+      let log_path = log_dir.join("nascraft.log");
+
+      let _ = APP_LOG_PATH.set(log_path.clone());
+      let logger = FILE_LOGGER.get_or_init(|| FileLogger::new(log_path.clone()));
+
+      if log::set_logger(logger).is_ok() {
+        log::set_max_level(log::LevelFilter::Info);
       }
+      let _ = logger.append_line(&format!(
+        "{} [INFO] logger initialized: {}",
+        std::time::SystemTime::now()
+          .duration_since(std::time::UNIX_EPOCH)
+          .map(|d| d.as_millis())
+          .unwrap_or(0),
+        log_path.display()
+      ));
+
       // let handle = app.handle().clone();
       // std::thread::spawn(move || {
       //   let (tx, rx) = channel();

@@ -13,6 +13,31 @@ const initTauriWebviewLogging = async () => {
 
     const { invoke } = await import('@tauri-apps/api/core');
 
+    const queue = [];
+    let flushTimer = null;
+
+    const flush = async () => {
+      flushTimer = null;
+      if (!queue.length) return;
+
+      const batch = queue.splice(0, queue.length);
+      const msg = batch.join('\n');
+      try {
+        await invoke('append_web_log', {
+          payload: { level: 'log', message: `[webview:batch] ${msg}` },
+        });
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    const enqueue = (line) => {
+      queue.push(line);
+      if (!flushTimer) {
+        flushTimer = setTimeout(flush, 250);
+      }
+    };
+
     const orig = {
       log: console.log,
       info: console.info,
@@ -38,7 +63,7 @@ const initTauriWebviewLogging = async () => {
             }
           })
           .join(' ');
-        invoke('append_web_log', { payload: { level: fnName, message: `[webview:${fnName}] ${msg}` } });
+        enqueue(`[webview:${fnName}] ${msg}`);
       } catch (e) {
         // ignore
       }
