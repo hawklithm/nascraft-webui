@@ -9,31 +9,76 @@
     "core:default",
     "core:app:default",
     "os:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "http:default",
+    "http:allow-fetch",
     "fs:default",
     {
-      "identifier": "fs:scope",
-      "allow": [{ "path": "$APPCONFIG/**" },{"path":"$APPDATA/**"},{"path":"$APPLOG/**"},{"path":"$APPCACHE/**"},{ "path": "$AUDIO/**" },{"path":"$APPDATA/**"},{"path":"$DOCUMENT/**"},{"path":"$DOWNLOAD/**"},{"path":"$PICTURE/**"},{"path":"$VIDEO/**"}]
-    },
-    "http:allow-fetch",
-    {
-      "identifier": "http:default",
+      "identifier": "fs:allow-read-file",
       "allow": [
-        { "url": "http://*" },
-        { "url": "https://*" },
-        { "url": "http://*/*" },
-        { "url": "https://*/*" },
-        { "url": "http://*:*" },
-        { "url": "https://*:*" },
-        { "url": "http://*:*/*" },
-        { "url": "https://*:*/*" }
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOG/**" },
+        { "path": "$APPCACHE/**" },
+        { "path": "$HOME_DIR/**" }
       ]
     },
-    "dialog:allow-open",
-    "dialog:default",
-    "fs:allow-appdata-write",
+    {
+      "identifier": "fs:allow-read",
+      "allow": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOG/**" },
+        { "path": "$APPCACHE/**" },
+        { "path": "$HOME_DIR/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOG/**" },
+        { "path": "$APPCACHE/**" },
+        { "path": "$HOME_DIR/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-metadata",
+      "allow": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOG/**" },
+        { "path": "$APPCACHE/**" },
+        { "path": "$HOME_DIR/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOG/**" },
+        { "path": "$APPCACHE/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOG/**" },
+        { "path": "$APPCACHE/**" }
+      ]
+    },
     {
       "identifier": "fs:allow-watch",
-      "allow": [{ "path": "$AUDIO/**" },{"path":"$APPDATA/**"},{"path":"$DOCUMENT/**"},{"path":"$DOWNLOAD/**"},{"path":"$PICTURE/**"},{"path":"$VIDEO/**"}]
+      "allow": [
+        { "path": "$APPCONFIG/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$HOME_DIR/**" }
+      ]
     },
     "fs:allow-unwatch"
   ]

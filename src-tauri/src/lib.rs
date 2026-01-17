@@ -4,6 +4,8 @@ use std::{sync::mpsc::channel, time::Duration};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use log::{info, warn};
+use std::sync::{Mutex, OnceLock};
+use notify::event::EventKind;
 
 #[derive(Debug, Deserialize)]
 struct HttpProxyRequest {
@@ -11,6 +13,81 @@ struct HttpProxyRequest {
   method: Option<String>,
   headers: Option<HashMap<String, String>>,
   body: Option<Vec<u8>>,
+}
+
+#[cfg(not(mobile))]
+#[tauri::command]
+fn read_desktop_file_bytes(path: String) -> Result<Vec<u8>, String> {
+  std::fs::read(&path).map_err(|e| format!("Failed to read file {}: {}", path, e))
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+fn read_desktop_file_bytes(_path: String) -> Result<Vec<u8>, String> {
+  Err("read_desktop_file_bytes is not supported on mobile".to_string())
+}
+
+#[cfg(not(mobile))]
+struct DesktopWatcherState {
+  watcher: notify::RecommendedWatcher,
+  watched: std::collections::HashSet<std::path::PathBuf>,
+}
+
+#[cfg(not(mobile))]
+static DESKTOP_WATCHER: OnceLock<Mutex<DesktopWatcherState>> = OnceLock::new();
+
+#[cfg(not(mobile))]
+#[tauri::command]
+fn update_desktop_watch_dirs(app: tauri::AppHandle, watch_dirs: Vec<String>) -> Result<(), String> {
+  use std::collections::HashSet;
+  use std::path::PathBuf;
+
+  let app_for_cb = app.clone();
+  let watcher_mutex = DESKTOP_WATCHER.get_or_init(|| {
+    let watcher = recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+      let event = match res {
+        Ok(e) => e,
+        Err(e) => {
+          info!("desktop watcher error: {}", e);
+          return;
+        }
+      };
+
+      match event.kind {
+        EventKind::Create(_) => {
+          for p in event.paths {
+            let payload = p.to_string_lossy().to_string();
+            let _ = app_for_cb.emit("nascraft:file-created", payload);
+          }
+        }
+        _ => {}
+      }
+    }).map_err(|e| e.to_string()).unwrap();
+
+    Mutex::new(DesktopWatcherState {
+      watcher,
+      watched: HashSet::new(),
+    })
+  });
+
+  let mut state = watcher_mutex.lock().map_err(|_| "desktop watcher lock poisoned".to_string())?;
+  let desired: HashSet<PathBuf> = watch_dirs.into_iter().filter(|s| !s.trim().is_empty()).map(PathBuf::from).collect();
+
+  // Unwatch removed
+  let removed: Vec<PathBuf> = state.watched.difference(&desired).cloned().collect();
+  for p in removed {
+    let _ = state.watcher.unwatch(&p);
+    state.watched.remove(&p);
+  }
+
+  // Watch added
+  let added: Vec<PathBuf> = desired.difference(&state.watched).cloned().collect();
+  for p in added {
+    state.watcher.watch(&p, RecursiveMode::Recursive).map_err(|e| e.to_string())?;
+    state.watched.insert(p);
+  }
+
+  Ok(())
 }
 
 #[cfg(not(mobile))]
@@ -261,7 +338,7 @@ pub fn run() {
   .plugin(tauri_plugin_os::init())
   .plugin(tauri_plugin_dialog::init())
   .plugin(tauri_plugin_http::init())
-    .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services])
+    .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services, update_desktop_watch_dirs, read_desktop_file_bytes])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

@@ -33,8 +33,23 @@ const SystemInit = () => {
   const [pathOptions, setPathOptions] = useState([]);
   const [showUploadProgress, setShowUploadProgress] = useState(false);
   const [uploadList, setUploadList] = useState([]);
+  const [isMobileTauri, setIsMobileTauri] = useState(false);
 
   useEffect(() => {
+    (async () => {
+      const isTauri = await isTauriRuntime();
+      if (!isTauri) {
+        setIsMobileTauri(false);
+        return;
+      }
+      try {
+        const p = await platform();
+        setIsMobileTauri(p === 'android' || p === 'ios');
+      } catch (e) {
+        setIsMobileTauri(false);
+      }
+    })();
+
     checkSystemStatus();
   }, []);
 
@@ -218,6 +233,12 @@ const SystemInit = () => {
     }
   };
 
+  const handleAddMobileWatchDir = () => {
+    const currentWatchDir = form.getFieldValue('watchDir') || [];
+    currentWatchDir.push({ baseDir: BaseDirectory.Document, subPath: '' });
+    form.setFieldsValue({ watchDir: currentWatchDir });
+  };
+
   const getStepStatus = (key) => {
     if (loading) return 'process';
     return initStatus[key] ? 'finish' : 'wait';
@@ -275,19 +296,56 @@ const SystemInit = () => {
                           label={`配置需要同步的文件夹路径`}
                           rules={[{ required: true, message: '请选择文件夹路径' }]}
                         >
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <Input
-                              readOnly
-                              placeholder="请选择需要监听的文件夹"
-                              value={form.getFieldValue(['watchDir', fieldKey])}
-                              style={{ flex: 1 }}
-                            />
-                            <Button onClick={() => handleSelectFolder(fieldKey)}>选择</Button>
-                          </div>
-                          <Button type="dashed" onClick={() => remove(name)}>删除</Button>
+                          {!isMobileTauri ? (
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <Input
+                                readOnly
+                                placeholder="请选择需要监听的文件夹"
+                                value={form.getFieldValue(['watchDir', fieldKey])}
+                                style={{ flex: 1 }}
+                              />
+                              <Button onClick={() => handleSelectFolder(fieldKey)}>选择</Button>
+                              <Button type="dashed" onClick={() => remove(name)}>删除</Button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <Select
+                                style={{ minWidth: 140 }}
+                                value={(form.getFieldValue(['watchDir', fieldKey]) || {}).baseDir}
+                                onChange={(v) => {
+                                  const cur = form.getFieldValue('watchDir') || [];
+                                  const item = cur[fieldKey] || {};
+                                  cur[fieldKey] = { ...item, baseDir: v };
+                                  form.setFieldsValue({ watchDir: cur });
+                                }}
+                              >
+                                {pathOptions.map((opt) => (
+                                  <Select.Option key={String(opt.baseDir)} value={opt.baseDir}>
+                                    {opt.name}
+                                  </Select.Option>
+                                ))}
+                              </Select>
+                              <Input
+                                placeholder="填写子路径（相对于上面的目录）"
+                                style={{ flex: 1, minWidth: 180 }}
+                                value={(form.getFieldValue(['watchDir', fieldKey]) || {}).subPath || ''}
+                                onChange={(e) => {
+                                  const cur = form.getFieldValue('watchDir') || [];
+                                  const item = cur[fieldKey] || {};
+                                  cur[fieldKey] = { ...item, subPath: e.target.value };
+                                  form.setFieldsValue({ watchDir: cur });
+                                }}
+                              />
+                              <Button type="dashed" onClick={() => remove(name)}>删除</Button>
+                            </div>
+                          )}
                         </Form.Item>
                       ))}
-                      <Button type="dashed" onClick={() => add()} block>添加文件夹路径</Button>
+                      {!isMobileTauri ? (
+                        <Button type="dashed" onClick={() => add()} block>添加文件夹路径</Button>
+                      ) : (
+                        <Button type="dashed" onClick={handleAddMobileWatchDir} block>添加文件夹路径</Button>
+                      )}
                     </div>
                   )}
                 </Form.List>

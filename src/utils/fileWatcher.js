@@ -9,6 +9,8 @@ const sysConfName = 'sys.conf';
 
 let currentWatchDirs = new Set();
 let isWatching = false;
+let desktopEventUnlisten = null;
+let isDesktopMode = false;
 
 // 添加上传进度管理
 let uploadProgressMap = new Map();
@@ -53,6 +55,40 @@ const calculateMD5 = (file) => {
 
     readNextChunk();
   });
+};
+
+const readFileForUpload = async (filePath) => {
+  if (isDesktopMode) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const bytes = await invoke('read_desktop_file_bytes', { path: filePath });
+    return new Uint8Array(bytes);
+  }
+
+  // Prefer absolute path read (arbitrary directories)
+  try {
+    return await readFile(filePath);
+  } catch (e) {
+    // fallback to BaseDirectory mapping
+    if (pathMap.size === 0) {
+      await initPathMap();
+    }
+
+    let targetPath = '';
+    let targetBaseDir = null;
+    for (const [path, baseDir] of pathMap.entries()) {
+      if (filePath.startsWith(path)) {
+        targetPath = filePath.substring(path.length + 1);
+        targetBaseDir = baseDir;
+        break;
+      }
+    }
+
+    if (!targetBaseDir) {
+      throw e;
+    }
+
+    return await readFile(targetPath, { baseDir: targetBaseDir });
+  }
 };
 
 const uploadChunk = async (file, chunk, fileId) => {
@@ -129,26 +165,8 @@ const handleFileUpload = async (filePath) => {
     let targetPath = '';
     let targetBaseDir = null;
 
-    // Prefer absolute path read (arbitrary directories)
     let fileContent = null;
-    try {
-      fileContent = await readFile(filePath);
-    } catch (e) {
-      // fallback to BaseDirectory mapping
-      for (const [path, baseDir] of pathMap.entries()) {
-        if (filePath.startsWith(path)) {
-          targetPath = filePath.substring(path.length + 1);
-          targetBaseDir = baseDir;
-          break;
-        }
-      }
-
-      if (!targetBaseDir) {
-        throw e;
-      }
-
-      fileContent = await readFile(targetPath, { baseDir: targetBaseDir });
-    }
+    fileContent = await readFileForUpload(filePath);
 
     // 更新初始状态
     updateUploadProgress(filePath, 0, 'uploading');
@@ -170,7 +188,7 @@ const handleFileUpload = async (filePath) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        filename: targetPath.split(sep()).pop(),
+        filename: filePath.split(sep()).pop(),
         total_size: file.size,
         description: '',
         checksum: md5Hash,
@@ -221,7 +239,24 @@ const updateWatchDirs = async () => {
     const sysConfJson = JSON.parse(sysConfContent);
     const { watchDir, interval } = sysConfJson;
 
-    const newWatchDirs = new Set(watchDir);
+    const list = Array.isArray(watchDir) ? watchDir : [];
+    const newWatchDirs = new Set();
+    const mobileWatchEntries = [];
+    for (const item of list) {
+      if (typeof item === 'string') {
+        newWatchDirs.add(item);
+      } else if (item && typeof item === 'object' && item.baseDir !== undefined) {
+        mobileWatchEntries.push(item);
+      }
+    }
+
+    if (isDesktopMode) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('update_desktop_watch_dirs', {
+        watchDirs: Array.from(newWatchDirs.values()),
+      });
+      return;
+    }
 
     // Add new directories to watch
     newWatchDirs.forEach(async (dir) => {
@@ -247,6 +282,30 @@ const updateWatchDirs = async () => {
       }
     });
 
+    // Mobile two-part entries: watch subPath relative to baseDir.
+    for (const entry of mobileWatchEntries) {
+      const key = `${entry.baseDir}:${entry.subPath || ''}`;
+      if (currentWatchDirs.has(key)) continue;
+      currentWatchDirs.add(key);
+      await watch(
+        entry.subPath || '',
+        async (event) => {
+          console.log('change detected:', event);
+          if (event.type.create !== undefined) {
+            console.log('New file detected:', event.paths);
+            for (const p of event.paths) {
+              await handleFileUpload(p);
+            }
+          }
+        },
+        {
+          baseDir: entry.baseDir,
+          delayMs: interval * 1000,
+          recursive: true,
+        }
+      );
+    }
+
     // Remove directories that are no longer in sys.conf
     currentWatchDirs.forEach((dir) => {
       if (!newWatchDirs.has(dir)) {
@@ -264,6 +323,27 @@ export const startWatching = async () => {
   if (isWatching) return; // 如果已经在监听，则直接返回
   isWatching = true; // 设置标志为true，表示已经开始监听
   console.log('startWatching...');
+
+  const isTauri = await isTauriRuntime();
+  if (isTauri) {
+    try {
+      const { platform } = await import('@tauri-apps/plugin-os');
+      const p = await platform();
+      isDesktopMode = p !== 'android' && p !== 'ios' && p !== 'unknown';
+    } catch (e) {
+      isDesktopMode = false;
+    }
+  }
+
+  if (isDesktopMode && !desktopEventUnlisten) {
+    const { listen } = await import('@tauri-apps/api/event');
+    desktopEventUnlisten = await listen('nascraft:file-created', async (event) => {
+      const filePath = event.payload;
+      if (typeof filePath === 'string' && filePath) {
+        await handleFileUpload(filePath);
+      }
+    });
+  }
 
   await updateWatchDirs();
 
