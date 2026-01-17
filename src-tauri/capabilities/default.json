@@ -42,7 +42,7 @@
       ]
     },
     {
-      "identifier": "fs:allow-metadata",
+      "identifier": "fs:allow-stat",
       "allow": [
         { "path": "$APPCONFIG/**" },
         { "path": "$APPDATA/**" },
