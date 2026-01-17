@@ -203,6 +203,12 @@ struct DesktopWatcherState {
 #[cfg(not(mobile))]
 static DESKTOP_WATCHER: OnceLock<Mutex<DesktopWatcherState>> = OnceLock::new();
 
+#[cfg(mobile)]
+#[tauri::command]
+fn update_desktop_watch_dirs(app: tauri::AppHandle, watch_dirs: Vec<String>) -> Result<(), String> {
+  panic!("update_desktop_watch_dirs is not allowed in mobile");
+}
+
 #[cfg(not(mobile))]
 #[tauri::command]
 fn update_desktop_watch_dirs(app: tauri::AppHandle, watch_dirs: Vec<String>) -> Result<(), String> {

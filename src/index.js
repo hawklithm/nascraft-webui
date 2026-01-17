@@ -66,6 +66,7 @@ const initTauriWebviewLogging = async () => {
         enqueue(`[webview:${fnName}] ${msg}`);
       } catch (e) {
         // ignore
+        orig.error(e);
       }
     };
 
