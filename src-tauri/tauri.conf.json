@@ -44,9 +44,6 @@
     },
     "os": {
     },
-    "photo": {
-      "enabled": true,
-      "platforms": ["android", "ios"]
-    }
+    "photo": null
   }
 }

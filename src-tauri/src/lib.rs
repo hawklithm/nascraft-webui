@@ -203,6 +203,12 @@ struct DesktopWatcherState {
 #[cfg(not(mobile))]
 static DESKTOP_WATCHER: OnceLock<Mutex<DesktopWatcherState>> = OnceLock::new();
 
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn update_desktop_watch_dirs(app: tauri::AppHandle, watch_dirs: Vec<String>) -> Result<(), String> {
+     panic!("update_desktop_watch_dirs is not supported on mobile");
+}
+
 #[cfg(not(target_os = "android"))]
 #[tauri::command]
 fn update_desktop_watch_dirs(app: tauri::AppHandle, watch_dirs: Vec<String>) -> Result<(), String> {
@@ -506,7 +512,7 @@ pub fn run() {
   .plugin(tauri_plugin_dialog::init())
   .plugin(tauri_plugin_http::init())
   .plugin(tauri_plugin_photo::init())
-    .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services, read_desktop_file_bytes,
+    .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services, update_desktop_watch_dirs,read_desktop_file_bytes,
       get_app_log_info,
       read_app_log,
       append_web_log

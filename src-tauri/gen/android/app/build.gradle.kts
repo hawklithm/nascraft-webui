@@ -69,6 +69,7 @@ dependencies {
     implementation(project(":tauri-android"))
     implementation(project(":tauri-plugin-fs"))
     implementation(project(":tauri-plugin-dialog"))
+    implementation(project(":tauri-plugin-photo"))
 }
 
 apply(from = "tauri.build.gradle.kts")
