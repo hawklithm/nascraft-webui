@@ -1,0 +1,22 @@
+{
+  "name": "tauri-plugin-photo",
+  "version": "0.1.0",
+  "description": "Tauri plugin for accessing photo gallery on mobile platforms",
+  "main": "dist-js/index.js",
+  "types": "dist-js/index.d.ts",
+  "type": "module",
+  "author": "You",
+  "license": "MIT",
+  "keywords": [
+    "tauri",
+    "plugin",
+    "photo",
+    "gallery"
+  ],
+  "files": [
+    "dist-js/index.js",
+    "dist-js/index.d.ts",
+    "ios",
+    "android"
+  ]
+}

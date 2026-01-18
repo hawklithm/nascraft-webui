@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useHistory } from 'react-router-dom';
-import { Card, Button, Steps, Typography, message, Result, Table, Form, Input, Select, FloatButton, Drawer, List, Progress, Badge } from 'antd';
+import { Card, Button, Steps, Typography, message, Result, Table, Form, Input, Select, FloatButton, Drawer, List, Progress, Badge, Switch } from 'antd';
 import { CheckCircleOutlined, LoadingOutlined, MinusCircleOutlined, ExclamationCircleOutlined, CloudUploadOutlined } from '@ant-design/icons';
 import { isTauriRuntime } from '../utils/apiFetch';
 import { readTextFile, mkdir, exists, BaseDirectory, writeTextFile } from '@tauri-apps/plugin-fs';
@@ -11,6 +11,7 @@ import { startWatching } from '../utils/fileWatcher';
 import { audioDir, appDataDir, documentDir, downloadDir, pictureDir, videoDir } from '@tauri-apps/api/path';
 import { sep } from '@tauri-apps/api/path';
 import { setUploadProgressCallback } from '../utils/fileWatcher';
+import { getAlbumUploadManager } from '../utils/AlbumUploadManager';
 
 const { Title } = Typography;
 const { Step } = Steps;
@@ -86,11 +87,13 @@ const SystemInit = () => {
     const watchDir = Array.isArray(sysConfJson.watchDir) ? sysConfJson.watchDir : [];
     const interval = typeof sysConfJson.interval === 'number' ? sysConfJson.interval : undefined;
     const host = typeof sysConfJson.host === 'string' ? sysConfJson.host : undefined;
+    const autoUploadAlbum = typeof sysConfJson.autoUploadAlbum === 'boolean' ? sysConfJson.autoUploadAlbum : false;
 
     form.setFieldsValue({
       watchDir,
       interval,
       host,
+      autoUploadAlbum,
     });
   }, [form]);
 
@@ -132,6 +135,7 @@ const SystemInit = () => {
       watchDir: processedWatchDir,
       interval: values.interval,
       host: values.host,
+      autoUploadAlbum: values.autoUploadAlbum || false,
     };
 
     await writeTextFile(sysConfName, JSON.stringify(newConfig, null, 2), { baseDir: BaseDirectory.AppConfig });
@@ -189,6 +193,12 @@ const SystemInit = () => {
         message.success('系统初始化成功！');
       }
       await startWatching();
+
+      // 启动相册自动上传（仅移动端）
+      if (isMobileTauri) {
+        await startAlbumAutoUpload();
+      }
+
       // setIsInitialized(true);
       setReconfigMode(false);
       setShowConfigForm(false);
@@ -210,6 +220,29 @@ const SystemInit = () => {
     await startWatching();
     // setIsInitialized(true);
     setReconfigMode(false);
+
+    // 如果开启了自动上传相册，重新启动上传
+    if (isMobileTauri && values.autoUploadAlbum) {
+      await startAlbumAutoUpload();
+    }
+  };
+
+  const startAlbumAutoUpload = async () => {
+    try {
+      const manager = getAlbumUploadManager();
+      const isEnabled = await manager.checkAutoUploadConfig();
+      if (!isEnabled) {
+        console.log('Album auto upload is disabled');
+        return;
+      }
+
+      console.log('Starting album auto upload...');
+      await manager.startAlbumUpload();
+      message.success('开始自动上传相册图片');
+    } catch (error) {
+      console.error('Failed to start album auto upload:', error);
+      message.error('启动相册自动上传失败：' + error.message);
+    }
   };
 
   const handleSelectFolder = async (fieldKey) => {
@@ -416,6 +449,13 @@ const SystemInit = () => {
                 style={{ width: '70%' }}
                 placeholder="输入服务地址"
               />
+            </Form.Item>
+            <Form.Item
+              name="autoUploadAlbum"
+              valuePropName="checked"
+              label="自动上传相册图片"
+            >
+              <Switch checkedChildren="开启" unCheckedChildren="关闭" />
             </Form.Item>
           </Form>
         )}

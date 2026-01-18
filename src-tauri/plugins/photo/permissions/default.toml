@@ -1,0 +1,5 @@
+[[permission]]
+identifier = "default"
+description = "Default permissions for the photo plugin."
+commands.allow = ["get_album_paths"]
+

@@ -1,8 +1,9 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
+  "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
   "windows": ["main"],
+  "description": "enables default permissions",
+  "local": true,
   "permissions": [
     "core:default",
     "core:app:default",
@@ -14,6 +15,8 @@
     "http:default",
     "http:allow-fetch",
     "fs:default",
+    "photo:default",
+    "photo:allow-get-album-paths",
     {
       "identifier": "fs:allow-read-file",
       "allow": [

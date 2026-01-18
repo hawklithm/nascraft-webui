@@ -8,8 +8,9 @@ import './index.css';
 import './App.css';
 
 const initTauriWebviewLogging = async () => {
+  console.log("Init Tauri webview logging");
   try {
-    if (!window || !window.__TAURI__) return;
+    // if (!window || !window.__TAURI__) return;
 
     const { invoke } = await import('@tauri-apps/api/core');
 
@@ -75,9 +76,10 @@ const initTauriWebviewLogging = async () => {
     console.warn = wrap('warn');
     console.error = wrap('error');
 
-    console.log('[nascraft] Tauri webview logging initialized');
+    orig.log('[nascraft] Tauri webview logging initialized');
   } catch (e) {
     // ignore
+    console.error(e);
   }
 };
 

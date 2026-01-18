@@ -24,10 +24,11 @@ log = "0.4"
 tauri = { version = "2.9.5", features = [] }
 tauri-plugin-log = "2.0.0-rc"
 notify = "7.0.0"
-tauri-plugin-fs = {version="2.2.0", features = ["watch"] }
-tauri-plugin-os = "2.3.2"
-tauri-plugin-dialog = "2.2.0"
+tauri-plugin-fs = {version="2.4", features = ["watch"] }
+tauri-plugin-os = "2.0"
+tauri-plugin-dialog = "2.4"
 tauri-plugin-http = "2.5.4"
+tauri_plugin_photo = { package = "tauri-plugin-photo", version = "2.2.0", path = "plugins/photo" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 mdns-sd = "0.17"
 tokio = { version = "1.0", features = ["rt", "time", "net"] }

@@ -79,7 +79,7 @@ This project is the frontend for the NASCraft Management System, built with Reac
 
    ```bash
    tauri android init
-   tauri android build
+   npx tauri android build --debug
    ```
 
 ## Project Structure

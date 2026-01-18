@@ -511,6 +511,7 @@ pub fn run() {
   .plugin(tauri_plugin_os::init())
   .plugin(tauri_plugin_dialog::init())
   .plugin(tauri_plugin_http::init())
+  .plugin(tauri_plugin_photo::init())
     .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services, update_desktop_watch_dirs, read_desktop_file_bytes,
       get_app_log_info,
       read_app_log,
