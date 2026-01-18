@@ -3,3 +3,4 @@
 /target/
 /gen/schemas
 .DS_Store
+plugins/photo/target

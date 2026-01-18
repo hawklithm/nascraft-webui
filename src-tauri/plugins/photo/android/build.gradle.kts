@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "app.tauri.plugin.photo"
+    namespace = "app.tauri.photo"
     compileSdk = 34
     
     defaultConfig {

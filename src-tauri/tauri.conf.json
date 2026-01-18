@@ -43,6 +43,10 @@
     "fs": {
     },
     "os": {
+    },
+    "photo": {
+      "enabled": true,
+      "platforms": ["android", "ios"]
     }
   }
 }

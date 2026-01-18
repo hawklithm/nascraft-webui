@@ -3,3 +3,4 @@ node_modules
 build
 src-tauri/.DS_Store
 .DS_Store
+.codebuddy

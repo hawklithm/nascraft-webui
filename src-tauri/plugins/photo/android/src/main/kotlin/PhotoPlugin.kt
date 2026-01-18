@@ -2,16 +2,18 @@ package app.tauri.photo
 
 import android.app.Activity
 import android.Manifest
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
+import android.content.ContentUris
+import android.provider.MediaStore
+import android.util.Log
 import app.tauri.annotation.Command
 import app.tauri.annotation.Permission
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-@Suppress("unused")
 @TauriPlugin(
     permissions = [
         Permission(strings = [Manifest.permission.READ_MEDIA_IMAGES], alias = "read_media_images"),
@@ -19,63 +21,110 @@ import app.tauri.plugin.Plugin
     ]
 )
 class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
+
     companion object {
-        const val READ_EXTERNAL_STORAGE_PERMISSION = android.Manifest.permission.READ_EXTERNAL_STORAGE
-        const val READ_MEDIA_IMAGES_PERMISSION = android.Manifest.permission.READ_MEDIA_IMAGES
-        
-        // 权限列表
-        val PERMISSIONS = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(READ_MEDIA_IMAGES_PERMISSION)
-        } else {
-            arrayOf(READ_EXTERNAL_STORAGE_PERMISSION)
-        }
+        private const val TAG = "PhotoPlugin"
     }
 
     /**
-     * 获取相册中所有图片文件的路径列表
-     * 使用 MediaStore API 查询所有图片，返回文件路径数组
+     * Get all photo paths from the device's album
      */
-    @Suppress("unused")
     @Command
-    fun getAlbumPaths(invoke: Invoke) {
-        val paths = runBlocking(Dispatchers.IO) {
-            val pathList = mutableListOf<String>()
+    fun get_album_paths(invoke: Invoke) {
+        Log.i(TAG, "get_album_paths command invoked")
+        
+        try {
+            val paths = mutableListOf<String>()
             
-            try {
-                val projection = arrayOf(
-                    android.provider.MediaStore.Images.Media._ID,
-                    android.provider.MediaStore.Images.Media.DATA
-                )
-
-                val sortOrder = "${android.provider.MediaStore.Images.Media.DATE_ADDED} DESC"
+            // Define projection for MediaStore query
+            val projection = arrayOf(
+                MediaStore.Images.Media._ID,
+                MediaStore.Images.Media.DATA,
+                MediaStore.Images.Media.DISPLAY_NAME,
+                MediaStore.Images.Media.RELATIVE_PATH
+            )
+            
+            val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
+            
+            Log.d(TAG, "Querying MediaStore for images...")
+            
+            val cursor = activity.contentResolver.query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                null,
+                null,
+                sortOrder
+            )
+            
+            cursor?.use { cursor ->
+                Log.d(TAG, "Cursor column count: ${cursor.columnCount}")
+                Log.d(TAG, "Cursor column names: ${cursor.columnNames.joinToString(", ")}")
                 
-                val cursor = activity.contentResolver.query(
-                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    projection,
-                    null,
-                    null,
-                    sortOrder
-                )
-
-                cursor?.use {
-                    val dataIndex = it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media.DATA)
-
-                    while (it.moveToNext()) {
-                        val data = it.getString(dataIndex)
-                        if (data != null && data.isNotEmpty()) {
-                            pathList.add(data)
-                        }
+                val idIndex = cursor.getColumnIndex(MediaStore.Images.Media._ID)
+                val dataIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
+                val nameIndex = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
+                
+                Log.d(TAG, "Column indices - ID: $idIndex, DATA: $dataIndex, NAME: $nameIndex")
+                
+                var photoCount = 0
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idIndex)
+                    
+                    // Try to get file path from DATA column first
+                    val filePath = if (dataIndex >= 0) {
+                        cursor.getString(dataIndex)
+                    } else {
+                        null
+                    }
+                    
+                    val fileName = if (nameIndex >= 0) {
+                        cursor.getString(nameIndex)
+                    } else {
+                        null
+                    }
+                    
+                    val path = if (!filePath.isNullOrEmpty()) {
+                        filePath
+                    } else {
+                        // Fallback to content URI
+                        val contentUri = ContentUris.withAppendedId(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            id
+                        )
+                        contentUri.toString()
+                    }
+                    
+                    paths.add(path)
+                    photoCount++
+                    
+                    // Log first few photos for debugging
+                    if (photoCount <= 5) {
+                        Log.d(TAG, "Photo $photoCount: $path (File: $fileName)")
                     }
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("PhotoPlugin", "Error fetching album paths", e)
+                
+                Log.i(TAG, "Found ${paths.size} photos in album")
             }
             
-            pathList
+            if (cursor == null) {
+                Log.e(TAG, "Failed to query MediaStore - cursor is null")
+                invoke.reject("Failed to access photo gallery")
+                return
+            }
+            
+            val result = JSObject()
+            result.put("paths", paths.toTypedArray())
+            result.put("count", paths.size)
+            
+            Log.i(TAG, "Successfully returning ${paths.size} photo paths")
+            invoke.resolve(result)
+            
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Permission denied for accessing photos", e)
+            invoke.reject("Permission denied: ${e.message}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error accessing photo gallery", e)
+            invoke.reject("Error accessing photos: ${e.message}")
         }
-        
-        val result = JSObject()
-        result.put("paths", paths.toTypedArray())
-        invoke.resolve(result)
     }
 }

@@ -36,16 +36,27 @@ export class AlbumUploadManager {
 
       // 调用自定义插件获取相册图片路径列表
       console.log('Fetching album photo paths...');
-      const photoPaths = await invoke('plugin:photo|get_album_paths');
-      
-      if (!photoPaths || photoPaths.length === 0) {
-        console.log('No photos found in album');
+      try {
+        const result = await invoke('plugin:photo|get_album_paths');
+        console.log('Raw plugin result:', result);
+        
+        // 处理返回结果：Android返回JSObject，iOS返回数组
+        const photoPaths = result.paths || result || [];
+        
+        if (!photoPaths || photoPaths.length === 0) {
+          console.log('No photos found in album');
+          this.isUploading = false;
+          return;
+        }
+
+        console.log(`Found ${photoPaths.length} photos in album`);
+        console.log('Sample photo paths:', photoPaths.slice(0, 3)); // 显示前3个路径用于调试
+        this.uploadQueue = photoPaths;
+      } catch (error) {
+        console.error('Failed to fetch album paths:', error);
         this.isUploading = false;
         return;
       }
-
-      console.log(`Found ${photoPaths.length} photos in album`);
-      this.uploadQueue = photoPaths;
       this.currentFileIndex = 0;
 
       // 开始逐个上传
