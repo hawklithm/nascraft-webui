@@ -36,6 +36,84 @@ Denies the get_album_paths command without any pre-configured scope.
 <tr>
 <td>
 
+`photo:allow-get-album-photos`
+
+</td>
+<td>
+
+Enables the get_album_photos command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`photo:deny-get-album-photos`
+
+</td>
+<td>
+
+Denies the get_album_photos command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`photo:allow-get-photo-thumbnail`
+
+</td>
+<td>
+
+Enables the get_photo_thumbnail command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`photo:deny-get-photo-thumbnail`
+
+</td>
+<td>
+
+Denies the get_photo_thumbnail command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`photo:allow-read-photo-data`
+
+</td>
+<td>
+
+Enables the read_photo_data command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`photo:deny-read-photo-data`
+
+</td>
+<td>
+
+Denies the read_photo_data command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `photo:default`
 
 </td>

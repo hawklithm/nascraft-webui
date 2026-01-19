@@ -3,6 +3,7 @@ package app.tauri.photo
 import android.app.Activity
 import android.Manifest
 import android.content.ContentUris
+import android.content.ContentResolver
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -18,6 +19,8 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 
 @TauriPlugin(
     permissions = [
@@ -33,56 +36,46 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     /**
-     * Get all photo paths from the device's album
+     * Get all photos from the device's album with detailed metadata
      */
     @Command
-    fun getAlbumPaths(invoke: Invoke) {
-        Log.i(TAG, "get_album_paths command invoked")
+    fun getAlbumPhotos(invoke: Invoke) {
+        Log.i(TAG, "get_album_photos command invoked")
+        
+        if (!hasRequiredPermissions()) {
+            invoke.reject("Permission required to access photos")
+            return
+        }
         
         try {
-            val paths = mutableListOf<String>()
-            val uris = mutableListOf<String>()
+            val photos = mutableListOf<JSObject>()
             
             // Define projection for MediaStore query
             val projection = arrayOf(
                 MediaStore.Images.Media._ID,
-                MediaStore.Images.Media.DATA,
                 MediaStore.Images.Media.DISPLAY_NAME,
-                MediaStore.Images.Media.RELATIVE_PATH
+                MediaStore.Images.Media.MIME_TYPE,
+                MediaStore.Images.Media.SIZE,
+                MediaStore.Images.Media.DATE_ADDED,
+                MediaStore.Images.Media.DATE_MODIFIED,
+                MediaStore.Images.Media.WIDTH,
+                MediaStore.Images.Media.HEIGHT,
+                MediaStore.Images.Media.ORIENTATION
             )
             
             val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
             
-            // 修改点4：使用正确的 URI
-            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-            } else {
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-            }
+            // Use external content URI
+            val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
             
             Log.d(TAG, "Querying MediaStore for images... URI: $collection")
-            Log.d(TAG, "Android SDK: ${Build.VERSION.SDK_INT}")
             
-            val selection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 10+ 的查询条件
-                "${MediaStore.Images.Media.RELATIVE_PATH} LIKE ?"
-            } else {
-                // Android 9 及以下的查询条件
-                null
-            }
-            
-            val selectionArgs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // 修改点5：放宽查询条件，查询所有图片
-                arrayOf("%DCIM%")
-            } else {
-                null
-            }
-            
+            // No selection criteria - get all images
             val cursor = activity.contentResolver.query(
                 collection,
                 projection,
-                selection,  // 修改点6：使用更宽松的查询条件
-                selectionArgs,
+                null,
+                null,
                 sortOrder
             )
             
@@ -94,81 +87,177 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
             
             cursor.use { cursor ->
                 Log.d(TAG, "Cursor column count: ${cursor.columnCount}")
-                Log.d(TAG, "Cursor column names: ${cursor.columnNames.joinToString(", ")}")
+                Log.d(TAG, "Found ${cursor.count} photos in MediaStore")
                 
                 val idIndex = cursor.getColumnIndex(MediaStore.Images.Media._ID)
-                val dataIndex = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    -1
-                } else {
-                    cursor.getColumnIndex(MediaStore.Images.Media.DATA)
-                }
                 val nameIndex = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
-                val relativePathIndex = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    cursor.getColumnIndex(MediaStore.Images.Media.RELATIVE_PATH)
-                } else {
-                    -1
-                }
-                
-                Log.d(TAG, "Column indices - ID: $idIndex, DATA: $dataIndex, NAME: $nameIndex, REL_PATH: $relativePathIndex")
+                val mimeTypeIndex = cursor.getColumnIndex(MediaStore.Images.Media.MIME_TYPE)
+                val sizeIndex = cursor.getColumnIndex(MediaStore.Images.Media.SIZE)
+                val dateAddedIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATE_ADDED)
+                val dateModifiedIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATE_MODIFIED)
+                val widthIndex = cursor.getColumnIndex(MediaStore.Images.Media.WIDTH)
+                val heightIndex = cursor.getColumnIndex(MediaStore.Images.Media.HEIGHT)
+                val orientationIndex = cursor.getColumnIndex(MediaStore.Images.Media.ORIENTATION)
                 
                 var photoCount = 0
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idIndex)
                     
-                    // 修改点7：构建 Content URI
+                    // Build Content URI
                     val contentUri = ContentUris.withAppendedId(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                         id
                     )
                     
-                    val uriString = contentUri.toString()
-                    uris.add(uriString)
+                    val photo = JSObject()
+                    photo.put("id", id)
+                    photo.put("uri", contentUri.toString())
+                    photo.put("name", cursor.getString(nameIndex) ?: "")
+                    photo.put("mimeType", cursor.getString(mimeTypeIndex) ?: "image/jpeg")
+                    photo.put("size", cursor.getLong(sizeIndex))
+                    photo.put("dateAdded", cursor.getLong(dateAddedIndex))
+                    photo.put("dateModified", cursor.getLong(dateModifiedIndex))
+                    photo.put("width", cursor.getInt(widthIndex))
+                    photo.put("height", cursor.getInt(heightIndex))
+                    photo.put("orientation", cursor.getInt(orientationIndex))
                     
-                    // 尝试获取文件路径（兼容 Android 10 以下）
-                    var filePath: String? = null
-                    if (dataIndex >= 0) {
-                        filePath = cursor.getString(dataIndex)
-                    } else if (relativePathIndex >= 0 && nameIndex >= 0) {
-                        // Android 10+ 构建路径
-                        val relativePath = cursor.getString(relativePathIndex)
-                        val fileName = cursor.getString(nameIndex)
-                        if (relativePath != null && fileName != null) {
-                            filePath = "$relativePath/$fileName"
-                        }
-                    }
-                    
-                    if (!filePath.isNullOrEmpty()) {
-                        paths.add(filePath)
-                    } else {
-                        paths.add(uriString) // 如果路径不可用，使用 URI
-                    }
-                    
+                    photos.add(photo)
                     photoCount++
                     
                     // Log first few photos for debugging
                     if (photoCount <= 5) {
-                        Log.d(TAG, "Photo $photoCount - URI: $uriString, Path: ${paths.last()}")
+                        Log.d(TAG, "Photo $photoCount - Name: ${photo.getString("name")}, Size: ${photo.getLong("size")}, URI: ${photo.getString("uri")}")
                     }
                 }
                 
-                Log.i(TAG, "Found ${paths.size} photos in album")
+                Log.i(TAG, "Successfully processed $photoCount photos")
             }
             
             val result = JSObject()
-            result.put("paths", paths.toTypedArray())
-            result.put("uris", uris.toTypedArray())
-            result.put("count", paths.size)
+            result.put("photos", photos.toTypedArray())
+            result.put("count", photos.size)
             result.put("androidVersion", Build.VERSION.SDK_INT)
             
-            Log.i(TAG, "Successfully returning ${paths.size} photo paths")
+            Log.i(TAG, "Returning ${photos.size} photo details")
             invoke.resolve(result)
             
         } catch (e: SecurityException) {
             Log.e(TAG, "Permission denied for accessing photos", e)
-            invoke.reject("Permission denied: ${e.message}. Please grant storage permission.")
+            invoke.reject("Permission denied: ${e.message}")
         } catch (e: Exception) {
             Log.e(TAG, "Error accessing photo gallery", e)
             invoke.reject("Error accessing photos: ${e.message}")
+        }
+    }
+    
+    /**
+     * Read photo file content as base64 string
+     */
+    @Command
+    fun readPhotoData(invoke: Invoke, uri: String) {
+        Log.i(TAG, "read_photo_data command invoked for URI: $uri")
+        
+        if (!hasRequiredPermissions()) {
+            invoke.reject("Permission required to read photo data")
+            return
+        }
+        
+        try {
+            val contentUri = Uri.parse(uri)
+            
+            // Open input stream from content URI
+            val inputStream: InputStream? = activity.contentResolver.openInputStream(contentUri)
+            if (inputStream == null) {
+                invoke.reject("Failed to open input stream for URI: $uri")
+                return
+            }
+            
+            inputStream.use { stream ->
+                // Read file content into byte array
+                val buffer = ByteArrayOutputStream()
+                val data = ByteArray(8192)
+                var bytesRead: Int
+                
+                while (stream.read(data).also { bytesRead = it } != -1) {
+                    buffer.write(data, 0, bytesRead)
+                }
+                
+                val fileData = buffer.toByteArray()
+                
+                // Convert to base64
+                val base64Data = android.util.Base64.encodeToString(fileData, android.util.Base64.DEFAULT)
+                
+                val result = JSObject()
+                result.put("uri", uri)
+                result.put("data", base64Data)
+                result.put("size", fileData.size)
+                
+                Log.i(TAG, "Successfully read ${fileData.size} bytes from photo")
+                invoke.resolve(result)
+            }
+            
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Permission denied for reading photo data", e)
+            invoke.reject("Permission denied: ${e.message}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading photo data", e)
+            invoke.reject("Error reading photo data: ${e.message}")
+        }
+    }
+    
+    /**
+     * Get photo thumbnail as base64
+     */
+    @Command
+    fun getPhotoThumbnail(invoke: Invoke, uri: String, width: Int = 200, height: Int = 200) {
+        Log.i(TAG, "get_photo_thumbnail command invoked for URI: $uri")
+        
+        if (!hasRequiredPermissions()) {
+            invoke.reject("Permission required to get photo thumbnail")
+            return
+        }
+        
+        try {
+            val contentUri = Uri.parse(uri)
+            
+            // Get thumbnail bitmap
+            val thumbnail = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Use ContentResolver to load thumbnail
+                activity.contentResolver.loadThumbnail(contentUri, android.util.Size(width, height), null)
+            } else {
+                // For older versions, use MediaStore.Images.Thumbnails
+                MediaStore.Images.Thumbnails.getThumbnail(
+                    activity.contentResolver,
+                    ContentUris.parseId(contentUri),
+                    MediaStore.Images.Thumbnails.MINI_KIND,
+                    null
+                )
+            }
+            
+            if (thumbnail == null) {
+                invoke.reject("Failed to generate thumbnail for URI: $uri")
+                return
+            }
+            
+            // Convert bitmap to base64
+            val byteArrayOutputStream = ByteArrayOutputStream()
+            thumbnail.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, byteArrayOutputStream)
+            val thumbnailData = byteArrayOutputStream.toByteArray()
+            val base64Data = android.util.Base64.encodeToString(thumbnailData, android.util.Base64.DEFAULT)
+            
+            val result = JSObject()
+            result.put("uri", uri)
+            result.put("thumbnail", base64Data)
+            result.put("width", thumbnail.width)
+            result.put("height", thumbnail.height)
+            result.put("format", "image/jpeg")
+            
+            Log.i(TAG, "Successfully generated thumbnail ${thumbnail.width}x${thumbnail.height}")
+            invoke.resolve(result)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error generating photo thumbnail", e)
+            invoke.reject("Error generating thumbnail: ${e.message}")
         }
     }
     

@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { readFile } from '@tauri-apps/plugin-fs';
 import { calculateMD5, submitMetadata, uploadChunk } from './UploadUtils';
 import UploadStateMachine, { UploadStatus } from './UploadStateMachine';
 
@@ -34,24 +33,24 @@ export class AlbumUploadManager {
       this.shouldStop = false;
       this.failedFiles = [];
 
-      // 调用自定义插件获取相册图片路径列表
-      console.log('Fetching album photo paths...');
+      // 调用自定义插件获取相册图片详细信息
+      console.log('Fetching album photos...');
       try {
-        const result = await invoke('plugin:photo|get_album_paths');
+        const result = await invoke('plugin:photo|get_album_photos');
         console.log('Raw plugin result:', result);
         
-        // 处理返回结果：Android返回JSObject，iOS返回数组
-        const photoPaths = result.paths || result || [];
+        // 解析返回的JSON字符串
+        const photos = JSON.parse(result);
         
-        if (!photoPaths || photoPaths.length === 0) {
+        if (!photos || photos.length === 0) {
           console.log('No photos found in album');
           this.isUploading = false;
           return;
         }
 
-        console.log(`Found ${photoPaths.length} photos in album`);
-        console.log('Sample photo paths:', photoPaths.slice(0, 3)); // 显示前3个路径用于调试
-        this.uploadQueue = photoPaths;
+        console.log(`Found ${photos.length} photos in album`);
+        console.log('Sample photos:', photos.slice(0, 3)); // 显示前3个图片信息用于调试
+        this.uploadQueue = photos;
       } catch (error) {
         console.error('Failed to fetch album paths:', error);
         this.isUploading = false;
@@ -83,10 +82,10 @@ export class AlbumUploadManager {
    */
   async processUploadQueue() {
     while (this.currentFileIndex < this.uploadQueue.length && !this.shouldStop) {
-      const filePath = this.uploadQueue[this.currentFileIndex];
+      const photoInfo = this.uploadQueue[this.currentFileIndex];
       
       try {
-        await this.uploadSingleFile(filePath);
+        await this.uploadSingleFile(photoInfo);
         this.currentFileIndex++;
         
         // 每个文件上传后等待 10 秒
@@ -95,9 +94,9 @@ export class AlbumUploadManager {
           await this.sleep(UPLOAD_DELAY_MS);
         }
       } catch (error) {
-        console.error(`Failed to upload file ${filePath}:`, error);
+        console.error(`Failed to upload file ${photoInfo.name || photoInfo.uri}:`, error);
         this.failedFiles.push({
-          filePath,
+          photoInfo,
           error: error.message,
           timestamp: Date.now(),
         });
@@ -115,23 +114,30 @@ export class AlbumUploadManager {
 
   /**
    * 上传单个文件（支持断点续传）
-   * @param {string} filePath - 文件路径
+   * @param {Object} photoInfo - 图片信息对象
    * @returns {Promise<void>}
    */
-  async uploadSingleFile(filePath) {
-    console.log(`Uploading file: ${filePath}`);
+  async uploadSingleFile(photoInfo) {
+    console.log(`Uploading file: ${photoInfo.name || photoInfo.uri}`);
     
     try {
-      // 读取文件内容
-      const fileContent = await readFile(filePath);
-      if (!fileContent || fileContent.length === 0) {
-        console.log(`File ${filePath} is empty, skipping`);
+      // 调用插件读取图片内容
+      const base64Data = await invoke('plugin:photo|read_photo_data', { uri: photoInfo.uri });
+      
+      if (!base64Data || base64Data.length === 0) {
+        console.log(`File ${photoInfo.name} is empty, skipping`);
         return;
       }
 
-      const file = new Blob([fileContent]);
-      const fileName = filePath.split(/[/\\]/).pop();
-      file.name = fileName;
+      // 将base64转换为Blob
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const file = new Blob([bytes], { type: photoInfo.mimeType || 'image/jpeg' });
+      file.name = photoInfo.name || 'photo.jpg';
 
       // 计算 MD5
       const md5Hash = await calculateMD5(file);
@@ -141,31 +147,31 @@ export class AlbumUploadManager {
       const metaData = await submitMetadata(file, md5Hash, '');
       const { chunks, total_chunks } = metaData;
 
-      // 创建或加载上传状态机
-      const stateMachine = await UploadStateMachine.loadOrCreate(
-        filePath,
-        file.size,
-        total_chunks,
-        md5Hash
-      );
+        // 创建或加载上传状态机
+        const stateMachine = await UploadStateMachine.loadOrCreate(
+          photoInfo.uri,
+          file.size,
+          total_chunks,
+          md5Hash
+        );
 
-      // 如果已完成，跳过
-      if (stateMachine.status === UploadStatus.COMPLETED) {
-        console.log(`File ${filePath} already uploaded, skipping`);
-        return;
-      }
-
-      // 设置文件 ID
-      stateMachine.setFileId(metaData.id);
-      stateMachine.setStatus(UploadStatus.UPLOADING);
-      await stateMachine.saveState();
-
-      // 更新上传进度
-      const progressCallback = (filePath, progress, status) => {
-        if (progressCallback) {
-          progressCallback(filePath, progress, status);
+        // 如果已完成，跳过
+        if (stateMachine.status === UploadStatus.COMPLETED) {
+          console.log(`File ${photoInfo.name} already uploaded, skipping`);
+          return;
         }
-      };
+
+        // 设置文件 ID
+        stateMachine.setFileId(metaData.id);
+        stateMachine.setStatus(UploadStatus.UPLOADING);
+        await stateMachine.saveState();
+
+        // 更新上传进度
+        const progressCallback = (uri, progress, status) => {
+          if (progressCallback) {
+            progressCallback(uri, progress, status);
+          }
+        };
 
       // 上传分片（支持断点续传）
       for (const chunk of chunks) {
@@ -219,10 +225,10 @@ export class AlbumUploadManager {
       // 所有分片上传完成
       stateMachine.setStatus(UploadStatus.COMPLETED);
       await stateMachine.saveState();
-      console.log(`File ${filePath} upload completed successfully`);
+      console.log(`File ${photoInfo.name} upload completed successfully`);
 
     } catch (error) {
-      console.error(`Upload file ${filePath} failed:`, error);
+      console.error(`Upload file ${photoInfo.name} failed:`, error);
       throw error;
     }
   }

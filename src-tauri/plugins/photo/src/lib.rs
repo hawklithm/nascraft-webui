@@ -25,3 +25,24 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(tauri::generate_handler![])
         .build()
 }
+
+// /// Get all photos from the device's album with detailed metadata
+// #[tauri::command]
+// async fn get_album_photos() -> Result<String, String> {
+//     // This command will be handled by the Android plugin
+//     Err("This command is only available on Android".to_string())
+// }
+
+// /// Read photo file content as base64 string
+// #[tauri::command]
+// async fn read_photo_data(uri: String) -> Result<String, String> {
+//     // This command will be handled by the Android plugin
+//     Err("This command is only available on Android".to_string())
+// }
+
+// /// Get photo thumbnail as base64
+// #[tauri::command]
+// async fn get_photo_thumbnail(uri: String, width: Option<u32>, height: Option<u32>) -> Result<String, String> {
+//     // This command will be handled by the Android plugin
+//     Err("This command is only available on Android".to_string())
+// }

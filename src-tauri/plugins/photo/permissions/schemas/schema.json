@@ -307,6 +307,42 @@
           "markdownDescription": "Denies the get_album_paths command without any pre-configured scope."
         },
         {
+          "description": "Enables the get_album_photos command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-album-photos",
+          "markdownDescription": "Enables the get_album_photos command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_album_photos command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-album-photos",
+          "markdownDescription": "Denies the get_album_photos command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_photo_thumbnail command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-photo-thumbnail",
+          "markdownDescription": "Enables the get_photo_thumbnail command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_photo_thumbnail command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-photo-thumbnail",
+          "markdownDescription": "Denies the get_photo_thumbnail command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the read_photo_data command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-read-photo-data",
+          "markdownDescription": "Enables the read_photo_data command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the read_photo_data command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-read-photo-data",
+          "markdownDescription": "Denies the read_photo_data command without any pre-configured scope."
+        },
+        {
           "description": "Default permissions for the photo plugin.",
           "type": "string",
           "const": "default",
