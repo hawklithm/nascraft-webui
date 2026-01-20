@@ -7,6 +7,7 @@ use std::sync::{Mutex, OnceLock};
 use notify::event::EventKind;
 use std::path::{Path, PathBuf};
 use std::io::{Read, Seek, SeekFrom, Write};
+use chrono::{Local, DateTime, Utc, TimeZone};
 
 #[derive(Debug, Deserialize)]
 struct HttpProxyRequest {
@@ -533,10 +534,10 @@ pub fn run() {
       }
       let _ = logger.append_line(&format!(
         "{} [INFO] logger initialized: {}",
-        std::time::SystemTime::now()
-          .duration_since(std::time::UNIX_EPOCH)
-          .map(|d| d.as_millis())
-          .unwrap_or(0),
+        Local::now().format("%Y-%m-%d %H:%M:%S"),
+          // .duration_since(std::time::UNIX_EPOCH)
+          // .map(|d| d.as_millis())
+          // .unwrap_or(0),
         log_path.display()
       ));
 

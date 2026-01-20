@@ -1,4 +1,12 @@
 // Guest JS code for photo plugin
+export const checkAndRequestPermissions = async () => {
+  return await window.__TAURI_INTERNALS__.invoke("plugin:photo|checkAndRequestPermissions");
+};
+
+export const openAppSettings = async () => {
+  return await window.__TAURI_INTERNALS__.invoke("plugin:photo|openAppSettings");
+};
+
 export const getAlbumPhotos = async () => {
   return await window.__TAURI_INTERNALS__.invoke("plugin:photo|get_album_photos");
 };

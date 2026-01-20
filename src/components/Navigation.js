@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Grid, Layout, Menu } from 'antd';
 import { useHistory, useLocation } from 'react-router-dom';
 import { 
@@ -19,7 +19,8 @@ const Navigation = () => {
   const screens = Grid.useBreakpoint();
   const isMobile = useMemo(() => !screens.md, [screens.md]);
 
-  const menuItems = [
+  // 使用useMemo缓存menuItems，避免不必要的重新渲染
+  const menuItems = useMemo(() => [
     {
       key: '/welcome',
       icon: <HomeOutlined />,
@@ -40,32 +41,22 @@ const Navigation = () => {
       icon: <PlayCircleOutlined />,
       label: '视频列表',
     },
-  ];
+  ], []);
+
+  // 使用useCallback缓存点击处理函数
+  const handleMenuClick = useCallback(({ key }) => {
+    history.push(key);
+  }, [history]);
 
   if (isMobile) {
     return (
-      <div
-        style={{
-          position: 'fixed',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 1000,
-          background: '#fff',
-          borderTop: '1px solid #f0f0f0',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-        }}
-      >
+      <div className="mobile-bottom-nav-container">
         <Menu
           className="mobile-bottom-nav"
           mode="horizontal"
           selectedKeys={[location.pathname]}
           items={menuItems}
-          onClick={({ key }) => history.push(key)}
-          style={{
-            display: 'flex',
-            borderBottom: 0,
-          }}
+          onClick={handleMenuClick}
         />
       </div>
     );
@@ -105,7 +96,7 @@ const Navigation = () => {
           borderRight: 0,
         }}
         items={menuItems}
-        onClick={({ key }) => history.push(key)}
+        onClick={handleMenuClick}
       />
     </Sider>
   );

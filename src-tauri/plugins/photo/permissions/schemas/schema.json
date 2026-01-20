@@ -295,6 +295,18 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the checkAndRequestPermissions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-checkAndRequestPermissions",
+          "markdownDescription": "Enables the checkAndRequestPermissions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the checkAndRequestPermissions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-checkAndRequestPermissions",
+          "markdownDescription": "Denies the checkAndRequestPermissions command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_album_paths command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-album-paths",
@@ -329,6 +341,18 @@
           "type": "string",
           "const": "deny-get-photo-thumbnail",
           "markdownDescription": "Denies the get_photo_thumbnail command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the openAppSettings command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-openAppSettings",
+          "markdownDescription": "Enables the openAppSettings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the openAppSettings command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-openAppSettings",
+          "markdownDescription": "Denies the openAppSettings command without any pre-configured scope."
         },
         {
           "description": "Enables the read_photo_data command without any pre-configured scope.",

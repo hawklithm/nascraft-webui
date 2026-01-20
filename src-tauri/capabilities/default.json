@@ -16,9 +16,11 @@
     "http:allow-fetch",
     "fs:default",
     "photo:default",
+    "photo:allow-checkAndRequestPermissions",
     "photo:allow-get-album-photos",
     "photo:allow-get-photo-thumbnail",
     "photo:allow-read-photo-data",
+    "photo:allow-openAppSettings",
     {
       "identifier": "fs:allow-read-file",
       "allow": [

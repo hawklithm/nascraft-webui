@@ -10,6 +10,32 @@
 <tr>
 <td>
 
+`photo:allow-checkAndRequestPermissions`
+
+</td>
+<td>
+
+Enables the checkAndRequestPermissions command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`photo:deny-checkAndRequestPermissions`
+
+</td>
+<td>
+
+Denies the checkAndRequestPermissions command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `photo:allow-get-album-paths`
 
 </td>
@@ -81,6 +107,32 @@ Enables the get_photo_thumbnail command without any pre-configured scope.
 <td>
 
 Denies the get_photo_thumbnail command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`photo:allow-openAppSettings`
+
+</td>
+<td>
+
+Enables the openAppSettings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`photo:deny-openAppSettings`
+
+</td>
+<td>
+
+Denies the openAppSettings command without any pre-configured scope.
 
 </td>
 </tr>

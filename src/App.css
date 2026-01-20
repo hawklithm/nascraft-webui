@@ -14,12 +14,39 @@
   background-color: #85a5ff !important; /* geekblue-3 */
 }
 
+/* 移动端底部导航容器 - 防止跳动 */
+.mobile-bottom-nav-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+  padding-bottom: env(safe-area-inset-bottom);
+  /* 添加这些样式来防止跳动 */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+  /* 强制硬件加速，防止重绘导致的跳动 */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-perspective: 1000;
+  perspective: 1000;
+}
+
 .mobile-bottom-nav {
   width: 100%;
+  /* 移除过渡动画，防止跳动 */
+  transition: none !important;
 }
 
 .mobile-bottom-nav.ant-menu-horizontal {
   display: flex;
+  border-bottom: 0;
+  /* 固定高度，防止内容变化导致高度抖动 */
+  height: 46px;
+  line-height: 46px;
 }
 
 .mobile-bottom-nav.ant-menu-horizontal > .ant-menu-item {
@@ -28,15 +55,43 @@
   text-align: center;
   margin: 0 !important;
   padding: 0 !important;
+  /* 移除所有动画和过渡 */
+  transition: none !important;
+  animation: none !important;
+  height: 46px !important;
+  line-height: 46px !important;
+  border-bottom: none !important;
+  /* 强制固定布局 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.mobile-bottom-nav.ant-menu-horizontal > .ant-menu-item:hover,
+.mobile-bottom-nav.ant-menu-horizontal > .ant-menu-item-active,
+.mobile-bottom-nav.ant-menu-horizontal > .ant-menu-item-selected {
+  border-bottom: none !important;
 }
 
 .mobile-bottom-nav.ant-menu-horizontal > .ant-menu-item .anticon {
   font-size: 18px;
   line-height: 1;
+  /* 移除图标过渡动画 */
+  transition: none !important;
 }
 
 .mobile-bottom-nav.ant-menu-horizontal > .ant-menu-item .ant-menu-title-content {
   display: block;
   font-size: 12px;
   line-height: 1.2;
+  /* 移除文字过渡动画 */
+  transition: none !important;
+}
+
+/* 防止页面内容被底部导航遮挡 */
+@media (max-width: 768px) {
+  .ant-layout-content {
+    padding-bottom: calc(24px + 46px + env(safe-area-inset-bottom)) !important;
+  }
 }

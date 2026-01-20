@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.Permission
@@ -32,25 +31,67 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
 
     companion object {
         private const val TAG = "PhotoPlugin"
-        private const val PERMISSION_REQUEST_CODE = 1001
+        private const val REQUEST_CODE_PERMISSION = 1001
     }
 
     /**
-     * Get all photos from the device's album with detailed metadata
+     * 检查并请求相册访问权限
+     */
+    @Command
+    fun checkAndRequestPermissions(invoke: Invoke) {
+        Log.i(TAG, "检查相册访问权限")
+        
+        val requiredPermissions = getRequiredPermissions()
+        val permissionsToRequest = mutableListOf<String>()
+        
+        // 检查哪些权限尚未授予
+        for (permission in requiredPermissions) {
+            if (ContextCompat.checkSelfPermission(activity, permission) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(permission)
+            }
+        }
+        
+        if (permissionsToRequest.isEmpty()) {
+            // 所有权限都已授予
+            val result = JSObject()
+            result.put("granted", true)
+            result.put("message", "所有必要权限已授予")
+            Log.i(TAG, "所有必要权限已授予")
+            invoke.resolve(result)
+        } else {
+            // 需要请求权限
+            Log.i(TAG, "需要请求权限: $permissionsToRequest")
+            
+            // 在Tauri插件中，通常需要在前端请求权限
+            // 这里返回一个消息告诉前端需要请求权限
+            val result = JSObject()
+            result.put("granted", false)
+            result.put("requiredPermissions", requiredPermissions.toList().toTypedArray())
+            result.put("message", "需要在应用中请求权限")
+            
+            // 注意：在Android插件中，我们不能直接触发系统的权限请求对话框
+            // 这通常由前端JavaScript通过Tauri的权限API来完成
+            invoke.resolve(result)
+        }
+    }
+
+    /**
+     * 获取相册中所有照片
      */
     @Command
     fun getAlbumPhotos(invoke: Invoke) {
-        Log.i(TAG, "get_album_photos command invoked")
+        Log.i(TAG, "get_album_photos 命令被调用")
         
         if (!hasRequiredPermissions()) {
-            invoke.reject("Permission required to access photos")
+            Log.e(TAG, "权限不足，无法访问相册")
+            invoke.reject("PERMISSION_DENIED", "需要相册访问权限，请先调用 checkAndRequestPermissions 检查权限")
             return
         }
         
         try {
             val photos = mutableListOf<JSObject>()
             
-            // Define projection for MediaStore query
+            // MediaStore查询的列
             val projection = arrayOf(
                 MediaStore.Images.Media._ID,
                 MediaStore.Images.Media.DISPLAY_NAME,
@@ -65,12 +106,16 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
             
             val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
             
-            // Use external content URI
-            val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            // 使用外部存储的内容URI
+            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            }
             
-            Log.d(TAG, "Querying MediaStore for images... URI: $collection")
+            Log.d(TAG, "查询 MediaStore 中的图片... URI: $collection")
             
-            // No selection criteria - get all images
+            // 查询MediaStore获取所有图片
             val cursor = activity.contentResolver.query(
                 collection,
                 projection,
@@ -80,14 +125,14 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
             )
             
             if (cursor == null) {
-                Log.e(TAG, "Failed to query MediaStore - cursor is null")
-                invoke.reject("Failed to access photo gallery: cursor is null")
+                Log.e(TAG, "查询 MediaStore 失败 - cursor 为 null")
+                invoke.reject("QUERY_FAILED", "无法访问相册: cursor 为 null")
                 return
             }
             
             cursor.use { cursor ->
-                Log.d(TAG, "Cursor column count: ${cursor.columnCount}")
-                Log.d(TAG, "Found ${cursor.count} photos in MediaStore")
+                Log.d(TAG, "Cursor 列数: ${cursor.columnCount}")
+                Log.d(TAG, "在 MediaStore 中找到 ${cursor.count} 张照片")
                 
                 val idIndex = cursor.getColumnIndex(MediaStore.Images.Media._ID)
                 val nameIndex = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
@@ -103,7 +148,7 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idIndex)
                     
-                    // Build Content URI
+                    // 构建内容URI
                     val contentUri = ContentUris.withAppendedId(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                         id
@@ -124,13 +169,13 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
                     photos.add(photo)
                     photoCount++
                     
-                    // Log first few photos for debugging
-                    if (photoCount <= 5) {
-                        Log.d(TAG, "Photo $photoCount - Name: ${photo.getString("name")}, Size: ${photo.getLong("size")}, URI: ${photo.getString("uri")}")
+                    // 调试：记录前几张照片
+                    if (photoCount <= 3) {
+                        Log.d(TAG, "照片 $photoCount - 名称: ${photo.getString("name")}, 大小: ${photo.getLong("size")}")
                     }
                 }
                 
-                Log.i(TAG, "Successfully processed $photoCount photos")
+                Log.i(TAG, "成功处理 $photoCount 张照片")
             }
             
             val result = JSObject()
@@ -138,42 +183,42 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
             result.put("count", photos.size)
             result.put("androidVersion", Build.VERSION.SDK_INT)
             
-            Log.i(TAG, "Returning ${photos.size} photo details")
+            Log.i(TAG, "返回 ${photos.size} 张照片的详细信息")
             invoke.resolve(result)
             
         } catch (e: SecurityException) {
-            Log.e(TAG, "Permission denied for accessing photos", e)
-            invoke.reject("Permission denied: ${e.message}")
+            Log.e(TAG, "访问照片时权限被拒绝", e)
+            invoke.reject("SECURITY_EXCEPTION", "权限被拒绝: ${e.message}")
         } catch (e: Exception) {
-            Log.e(TAG, "Error accessing photo gallery", e)
-            invoke.reject("Error accessing photos: ${e.message}")
+            Log.e(TAG, "访问相册时出错", e)
+            invoke.reject("QUERY_ERROR", "访问相册时出错: ${e.message}")
         }
     }
     
     /**
-     * Read photo file content as base64 string
+     * 读取照片文件内容为base64字符串
      */
     @Command
     fun readPhotoData(invoke: Invoke, uri: String) {
-        Log.i(TAG, "read_photo_data command invoked for URI: $uri")
+        Log.i(TAG, "read_photo_data 命令被调用，URI: $uri")
         
         if (!hasRequiredPermissions()) {
-            invoke.reject("Permission required to read photo data")
+            invoke.reject("PERMISSION_DENIED", "需要相册访问权限")
             return
         }
         
         try {
             val contentUri = Uri.parse(uri)
             
-            // Open input stream from content URI
+            // 从内容URI打开输入流
             val inputStream: InputStream? = activity.contentResolver.openInputStream(contentUri)
             if (inputStream == null) {
-                invoke.reject("Failed to open input stream for URI: $uri")
+                invoke.reject("IO_ERROR", "无法为 URI 打开输入流: $uri")
                 return
             }
             
             inputStream.use { stream ->
-                // Read file content into byte array
+                // 将文件内容读入字节数组
                 val buffer = ByteArrayOutputStream()
                 val data = ByteArray(8192)
                 var bytesRead: Int
@@ -184,7 +229,7 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
                 
                 val fileData = buffer.toByteArray()
                 
-                // Convert to base64
+                // 转换为base64
                 val base64Data = android.util.Base64.encodeToString(fileData, android.util.Base64.DEFAULT)
                 
                 val result = JSObject()
@@ -192,40 +237,40 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
                 result.put("data", base64Data)
                 result.put("size", fileData.size)
                 
-                Log.i(TAG, "Successfully read ${fileData.size} bytes from photo")
+                Log.i(TAG, "成功从照片读取 ${fileData.size} 字节")
                 invoke.resolve(result)
             }
             
         } catch (e: SecurityException) {
-            Log.e(TAG, "Permission denied for reading photo data", e)
-            invoke.reject("Permission denied: ${e.message}")
+            Log.e(TAG, "读取照片数据时权限被拒绝", e)
+            invoke.reject("SECURITY_EXCEPTION", "权限被拒绝: ${e.message}")
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading photo data", e)
-            invoke.reject("Error reading photo data: ${e.message}")
+            Log.e(TAG, "读取照片数据时出错", e)
+            invoke.reject("READ_ERROR", "读取照片数据时出错: ${e.message}")
         }
     }
     
     /**
-     * Get photo thumbnail as base64
+     * 获取照片缩略图
      */
     @Command
     fun getPhotoThumbnail(invoke: Invoke, uri: String, width: Int = 200, height: Int = 200) {
-        Log.i(TAG, "get_photo_thumbnail command invoked for URI: $uri")
+        Log.i(TAG, "get_photo_thumbnail 命令被调用，URI: $uri")
         
         if (!hasRequiredPermissions()) {
-            invoke.reject("Permission required to get photo thumbnail")
+            invoke.reject("PERMISSION_DENIED", "需要相册访问权限")
             return
         }
         
         try {
             val contentUri = Uri.parse(uri)
             
-            // Get thumbnail bitmap
+            // 获取缩略图
             val thumbnail = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Use ContentResolver to load thumbnail
+                // 使用 ContentResolver 加载缩略图
                 activity.contentResolver.loadThumbnail(contentUri, android.util.Size(width, height), null)
             } else {
-                // For older versions, use MediaStore.Images.Thumbnails
+                // 旧版本使用 MediaStore.Images.Thumbnails
                 MediaStore.Images.Thumbnails.getThumbnail(
                     activity.contentResolver,
                     ContentUris.parseId(contentUri),
@@ -235,11 +280,11 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
             }
             
             if (thumbnail == null) {
-                invoke.reject("Failed to generate thumbnail for URI: $uri")
+                invoke.reject("THUMBNAIL_ERROR", "无法为 URI 生成缩略图: $uri")
                 return
             }
             
-            // Convert bitmap to base64
+            // 将bitmap转换为base64
             val byteArrayOutputStream = ByteArrayOutputStream()
             thumbnail.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, byteArrayOutputStream)
             val thumbnailData = byteArrayOutputStream.toByteArray()
@@ -252,32 +297,20 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
             result.put("height", thumbnail.height)
             result.put("format", "image/jpeg")
             
-            Log.i(TAG, "Successfully generated thumbnail ${thumbnail.width}x${thumbnail.height}")
+            Log.i(TAG, "成功生成缩略图 ${thumbnail.width}x${thumbnail.height}")
             invoke.resolve(result)
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error generating photo thumbnail", e)
-            invoke.reject("Error generating thumbnail: ${e.message}")
+            Log.e(TAG, "生成照片缩略图时出错", e)
+            invoke.reject("THUMBNAIL_ERROR", "生成缩略图时出错: ${e.message}")
         }
     }
     
     /**
-     * 修改点8：检查运行时权限
+     * 检查运行时的必要权限
      */
     private fun hasRequiredPermissions(): Boolean {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+
-            arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11-12
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        } else {
-            // Android 10 及以下
-            arrayOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            )
-        }
+        val permissions = getRequiredPermissions()
         
         return permissions.all { permission ->
             ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
@@ -285,14 +318,34 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
     }
     
     /**
-     * 修改点9：添加辅助方法获取特定相册
+     * 根据Android版本获取所需的权限
+     */
+    private fun getRequiredPermissions(): Array<String> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ (API 33+)
+            arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11-12 (API 30-32)
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        } else {
+            // Android 10 及以下 (API 29 及以下)
+            // 注意：在Android 10及以下，有时也需要WRITE_EXTERNAL_STORAGE权限来读取媒体文件
+            arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+        }
+    }
+    
+    /**
+     * 获取指定相册的照片
      */
     @Command
     fun getPhotosByAlbum(invoke: Invoke, albumName: String) {
-        Log.i(TAG, "get_photos_by_album command invoked for album: $albumName")
+        Log.i(TAG, "get_photos_by_album 命令被调用，相册: $albumName")
         
         if (!hasRequiredPermissions()) {
-            invoke.reject("Permission required")
+            invoke.reject("PERMISSION_DENIED", "需要相册访问权限")
             return
         }
         
@@ -327,7 +380,7 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
                 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idIndex)
-                    val name = cursor.getString(nameIndex)
+                    val name = cursor.getString(nameIndex) ?: ""
                     
                     val contentUri = ContentUris.withAppendedId(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -350,9 +403,54 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
             
             invoke.resolve(result)
             
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting photos by album", e)
-            invoke.reject("Error: ${e.message}")
-        }
+    } catch (e: Exception) {
+      Log.e(TAG, "按相册获取照片时出错", e)
+      invoke.reject("ALBUM_ERROR", "按相册获取照片时出错: ${e.message}")
     }
+  }
+
+  /**
+   * 打开应用设置页面
+   */
+  @Command
+  fun openAppSettings(invoke: Invoke) {
+    Log.i(TAG, "打开应用设置页面")
+    
+    try {
+      // 创建Intent打开应用的设置页面
+      val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+      val uri = android.net.Uri.fromParts("package", activity.packageName, null)
+      intent.data = uri
+      
+      // 添加标志以在新任务中启动
+      intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+      
+      // 启动设置页面
+      activity.startActivity(intent)
+      
+      Log.i(TAG, "成功启动应用设置页面")
+      invoke.resolve()
+      
+    } catch (e: android.content.ActivityNotFoundException) {
+      Log.e(TAG, "无法找到设置应用", e)
+      
+      // 尝试使用通用设置页面
+      try {
+        val fallbackIntent = android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+        fallbackIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        activity.startActivity(fallbackIntent)
+        
+        Log.i(TAG, "使用通用设置页面作为备选方案")
+        invoke.resolve()
+        
+      } catch (fallbackError: Exception) {
+        Log.e(TAG, "备选方案也失败", fallbackError)
+        invoke.reject("SETTINGS_ERROR", "无法打开设置页面: ${fallbackError.message}")
+      }
+      
+    } catch (e: Exception) {
+      Log.e(TAG, "打开应用设置页面时出错", e)
+      invoke.reject("SETTINGS_ERROR", "打开设置页面时出错: ${e.message}")
+    }
+  }
 }

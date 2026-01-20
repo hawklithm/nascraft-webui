@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Button, Grid, Layout, Typography, Spin } from 'antd';
 import { useHistory, useLocation } from 'react-router-dom';
 
@@ -12,6 +12,7 @@ const LogsPage = () => {
   const [logText, setLogText] = useState('');
   const [err, setErr] = useState(null);
   const [logFile, setLogFile] = useState('');
+  const logContainerRef = useRef(null);
 
   const screens = Grid.useBreakpoint();
   const isMobile = useMemo(() => !screens.md, [screens.md]);
@@ -24,6 +25,20 @@ const LogsPage = () => {
     }
     history.goBack();
   };
+
+  // 滚动到日志底部
+  const scrollToBottom = () => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  };
+
+  // 自动滚动到底部
+  useEffect(() => {
+    if (logText && !loading) {
+      scrollToBottom();
+    }
+  }, [logText, loading]);
 
   useEffect(() => {
     let mounted = true;
@@ -80,6 +95,7 @@ const LogsPage = () => {
         ) : null}
 
         <div
+          ref={logContainerRef}
           style={{
             marginTop: 12,
             background: '#111827',
@@ -117,9 +133,18 @@ const LogsPage = () => {
             borderTop: '1px solid #f0f0f0',
             paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
             zIndex: 1100,
+            display: 'flex',
+            gap: '12px',
           }}
         >
-          <Button type="primary" block onClick={goBack}>
+          <Button 
+            type="default" 
+            onClick={scrollToBottom}
+            style={{ flex: 1 }}
+          >
+            滚动到底部
+          </Button>
+          <Button type="primary" block onClick={goBack} style={{ flex: 1 }}>
             Back
           </Button>
         </div>

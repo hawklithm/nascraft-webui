@@ -1,4 +1,4 @@
-const COMMANDS: &[&str] = &["get_album_photos", "read_photo_data", "get_photo_thumbnail"];
+const COMMANDS: &[&str] = &["checkAndRequestPermissions", "openAppSettings", "get_album_photos", "read_photo_data", "get_photo_thumbnail"];
 
 fn main() {
     tauri_plugin::Builder::new(COMMANDS)
