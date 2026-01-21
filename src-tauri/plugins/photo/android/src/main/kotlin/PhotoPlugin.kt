@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.core.content.ContextCompat
 import app.tauri.annotation.Command
+import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.Permission
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
@@ -179,7 +180,7 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
             }
             
             val result = JSObject()
-            result.put("photos", photos.toTypedArray())
+            result.put("photos", photos)
             result.put("count", photos.size)
             result.put("androidVersion", Build.VERSION.SDK_INT)
             
@@ -199,8 +200,16 @@ class PhotoPlugin(private val activity: Activity) : Plugin(activity) {
      * 读取照片文件内容为base64字符串
      */
     @Command
-    fun readPhotoData(invoke: Invoke, uri: String) {
-        Log.i(TAG, "read_photo_data 命令被调用，URI: $uri")
+    fun readPhotoData(invoke: Invoke) {
+        @InvokeArg
+        class Args {
+            lateinit var uri: String
+        }
+
+        Log.i(TAG, "read_photo_data 命令被调用")
+        val args = invoke.parseArgs(Args::class.java)
+        Log.i(TAG, "read_photo_data 命令被调用，URI: ${args.uri}")
+        var uri = args.uri
         
         if (!hasRequiredPermissions()) {
             invoke.reject("PERMISSION_DENIED", "需要相册访问权限")

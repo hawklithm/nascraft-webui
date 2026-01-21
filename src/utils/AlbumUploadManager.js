@@ -40,7 +40,9 @@ export class AlbumUploadManager {
         console.log('Raw plugin result:', result);
         
         // 解析返回的JSON字符串
-        const photos = JSON.parse(result);
+        // const photoJson = JSON.parse(result);
+        console.log('photo json result:', result.photos);
+        const photos = JSON.parse(result.photos);
         
         if (!photos || photos.length === 0) {
           console.log('No photos found in album');
@@ -122,7 +124,9 @@ export class AlbumUploadManager {
     
     try {
       // 调用插件读取图片内容
-      const base64Data = await invoke('plugin:photo|read_photo_data', { uri: photoInfo.uri });
+      const result = await invoke('plugin:photo|read_photo_data', { uri: photoInfo.uri });
+      
+      const base64Data = result.data;
       
       if (!base64Data || base64Data.length === 0) {
         console.log(`File ${photoInfo.name} is empty, skipping`);
