@@ -1,8 +1,0 @@
-# Photo Plugin Permissions for Mobile Platforms
-
-# Permission to access photo gallery
-[platforms.android]
-permissions = ["read_media_images", "read_external_storage"]
-
-[platforms.ios]
-permissions = ["photo-library-add", "photo-library-read"]

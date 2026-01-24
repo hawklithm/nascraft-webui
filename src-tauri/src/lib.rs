@@ -1,13 +1,13 @@
 use tauri::{Emitter, Manager};
-use notify::{recommended_watcher, Config, RecursiveMode, Watcher};
-use std::{sync::mpsc::channel, time::Duration};
+use notify::{recommended_watcher, RecursiveMode, Watcher};
+use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use notify::event::EventKind;
 use std::path::{Path, PathBuf};
 use std::io::{Read, Seek, SeekFrom, Write};
-use chrono::{Local, DateTime, Utc, TimeZone};
+use chrono::Local;
 
 #[derive(Debug, Deserialize)]
 struct HttpProxyRequest {
@@ -264,184 +264,183 @@ fn update_desktop_watch_dirs(app: tauri::AppHandle, watch_dirs: Vec<String>) -> 
   Ok(())
 }
 
-#[cfg(not(mobile))]
+//#[cfg(not(mobile))]
 #[tauri::command]
-async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsDiscoveredServer>, String> {
+async fn test_mdns_discovery(timeout_ms: Option<u64>) -> Result<Vec<String>, String> {
   use mdns_sd::{ServiceDaemon, ServiceEvent};
-  use std::collections::HashSet;
-
-  let timeout_ms = timeout_ms.unwrap_or(1500);
-  let service_type = "_nascraft._tcp.local.";
-
+  
+  let timeout_ms = timeout_ms.unwrap_or(3000);
+  let service_type = "_services._dns-sd._udp.local."; // 发现所有服务
+  
+  file_info!("Starting mDNS test discovery for all services");
+  
   let mdns = ServiceDaemon::new().map_err(|e| e.to_string())?;
   let receiver = mdns.browse(service_type).map_err(|e| e.to_string())?;
-  file_info!("mDNS discovery started: service_type={}, timeout_ms={}", service_type, timeout_ms);
-
+  
   let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
-  let mut out: Vec<MdnsDiscoveredServer> = Vec::new();
-  let mut seen: HashSet<String> = HashSet::new();
-
+  let mut discovered_services = Vec::new();
+  
   while std::time::Instant::now() < deadline {
     let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-    match receiver.recv_timeout(std::cmp::min(remaining, std::time::Duration::from_millis(250))) {
-      Ok(ServiceEvent::SearchStarted(_ty)) => {}
-      Ok(ServiceEvent::ServiceFound(_fullname, _ty)) => {}
+    match receiver.recv_timeout(std::cmp::min(remaining, std::time::Duration::from_millis(500))) {
       Ok(ServiceEvent::ServiceResolved(resolved)) => {
-        if !resolved.is_valid() {
-          continue;
-        }
-        let fullname = resolved.get_fullname().to_string();
-        if seen.contains(&fullname) {
-          continue;
-        }
-        seen.insert(fullname.clone());
-
-        let mut v4_list: Vec<String> = resolved
-          .get_addresses_v4()
-          .into_iter()
-          .map(|ip| ip.to_string())
-          .collect();
-        v4_list.sort();
-
-        // Some environments might not provide an A record; fall back to hostname.
-        let hostname = resolved.get_hostname().to_string();
-        if v4_list.is_empty() {
-          v4_list.push(hostname.clone());
-        }
-
-        // Derive instance name from fullname: <instance>.<service_type>
-        let instance_name = fullname.clone()          
-          .strip_suffix(service_type)
-          .and_then(|s| s.strip_suffix('.'))
-          .unwrap_or(fullname.clone().as_str())
-          .to_string();
-
-        out.push(MdnsDiscoveredServer {
-          instance_name,
-          service_type: service_type.to_string(),
-          hostname,
-          ip_v4: v4_list,
-          port: resolved.get_port(),
-        });
-
-        file_info!("mDNS service resolved: fullname={}", resolved.get_fullname());
+        let service_info = format!("{} - {}:{}", 
+          resolved.get_fullname(),
+          resolved.get_hostname(),
+          resolved.get_port()
+        );
+        file_info!("Test discovery found: {}", service_info);
+        discovered_services.push(service_info);
       }
-      Ok(_other) => {}
+      Ok(_) => {}
       Err(e) => {
-        file_info!("mDNS discovery recv_timeout error: {}", e);
+        if !e.to_string().contains("time") {
+          file_info!("Test discovery error: {}", e);
+        }
       }
     }
   }
-
-  file_info!("mDNS discovery finished: services_found={}", out.len());
+  
   let _ = mdns.shutdown();
-  Ok(out)
+  file_info!("Test discovery finished, found {} services", discovered_services.len());
+  Ok(discovered_services)
+}
+
+#[cfg(not(mobile))]
+#[tauri::command]
+async fn discover_nascraft_services(timeout_ms: Option<u64>, _broadcast_addrs: Option<Vec<String>>) -> Result<Vec<MdnsDiscoveredServer>, String> {
+  use mdns_sd::{ServiceDaemon, ServiceEvent};
+  use std::collections::HashSet;
+
+  let timeout_ms = timeout_ms.unwrap_or(5000); // 增加超时时间到5秒
+  let service_types = vec![
+    "_nascraft._tcp.local.",
+    "_http._tcp.local.", // 尝试通用的HTTP服务类型
+  ];
+
+  file_info!("Starting mDNS discovery with timeout {}ms", timeout_ms);
+  
+  let mut all_services = Vec::new();
+  
+  for service_type in service_types {
+    file_info!("Trying to discover services of type: {}", service_type);
+    
+    let mdns = match ServiceDaemon::new() {
+      Ok(daemon) => daemon,
+      Err(e) => {
+        file_info!("Failed to create mDNS daemon for {}: {}", service_type, e);
+        continue;
+      }
+    };
+    
+    let receiver = match mdns.browse(service_type) {
+      Ok(rx) => rx,
+      Err(e) => {
+        file_info!("Failed to start browsing for {}: {}", service_type, e);
+        let _ = mdns.shutdown();
+        continue;
+      }
+    };
+    
+    file_info!("mDNS browsing started for: {}", service_type);
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+    let mut out: Vec<MdnsDiscoveredServer> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+
+    while std::time::Instant::now() < deadline {
+      let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+      match receiver.recv_timeout(std::cmp::min(remaining, std::time::Duration::from_millis(500))) {
+        Ok(ServiceEvent::SearchStarted(_ty)) => {
+          file_info!("mDNS search started for {}", service_type);
+        }
+        Ok(ServiceEvent::ServiceFound(_fullname, _ty)) => {
+          file_info!("mDNS service found for {}", service_type);
+        }
+        Ok(ServiceEvent::ServiceResolved(resolved)) => {
+          file_info!("mDNS service resolved: {:?}", resolved.get_fullname());
+          
+          if !resolved.is_valid() {
+            file_info!("Service resolved but invalid, skipping");
+            continue;
+          }
+          
+          let fullname = resolved.get_fullname().to_string();
+          if seen.contains(&fullname) {
+            continue;
+          }
+          seen.insert(fullname.clone());
+
+          let mut v4_list: Vec<String> = resolved
+            .get_addresses_v4()
+            .into_iter()
+            .map(|ip| ip.to_string())
+            .collect();
+          v4_list.sort();
+
+          // Some environments might not provide an A record; fall back to hostname.
+          let hostname = resolved.get_hostname().to_string();
+          if v4_list.is_empty() {
+            file_info!("No IPv4 addresses found, using hostname: {}", hostname);
+            v4_list.push(hostname.clone());
+          }
+
+          // Derive instance name from fullname: <instance>.<service_type>
+          let instance_name = fullname.clone()          
+            .strip_suffix(service_type)
+            .and_then(|s| s.strip_suffix('.'))
+            .unwrap_or(fullname.clone().as_str())
+            .to_string();
+
+          let port = resolved.get_port();
+          file_info!("Found service: instance={}, hostname={}, ips={:?}, port={}", 
+                    instance_name, hostname, v4_list, port);
+
+          out.push(MdnsDiscoveredServer {
+            instance_name,
+            service_type: service_type.to_string(),
+            hostname,
+            ip_v4: v4_list,
+            port,
+          });
+        }
+        Ok(_other) => {}
+        Err(e) => {
+          // 超时是正常的，不记录为错误
+          if !e.to_string().contains("timed out") && !e.to_string().contains("timeout") {
+            file_info!("mDNS discovery error for {}: {}", service_type, e);
+          }
+        }
+      }
+    }
+
+    file_info!("mDNS discovery finished for {}: services_found={}", service_type, out.len());
+    let _ = mdns.shutdown();
+    all_services.extend(out);
+  }
+
+  file_info!("Total mDNS services found: {}", all_services.len());
+  
+  // 去重：基于hostname和port
+  let mut unique_services = Vec::new();
+  let mut seen_keys = HashSet::new();
+  
+  for service in all_services {
+    let key = format!("{}:{}", service.hostname, service.port);
+    if !seen_keys.contains(&key) {
+      seen_keys.insert(key);
+      unique_services.push(service);
+    }
+  }
+  
+  file_info!("Unique services after deduplication: {}", unique_services.len());
+  Ok(unique_services)
 }
 
 #[cfg(mobile)]
 #[tauri::command]
-async fn discover_nascraft_services(timeout_ms: Option<u64>) -> Result<Vec<MdnsDiscoveredServer>, String> {
-  use serde::{Deserialize, Serialize};
-  use std::collections::HashSet;
-  use tokio::net::UdpSocket;
-
-  #[derive(Debug, Serialize)]
-  struct Probe {
-    t: String,
-    v: u32,
-  }
-
-  #[derive(Debug, Deserialize)]
-  struct Resp {
-    t: String,
-    v: u32,
-    name: Option<String>,
-    proto: Option<String>,
-    port: Option<u16>,
-  }
-
-  let timeout_ms = timeout_ms.unwrap_or(1500);
-  let discovery_port: u16 = 53530;
-  let service_type = "_nascraft._udp.local.";
-
-  file_info!(
-    "UDP discovery started (mobile): broadcast_port={}, timeout_ms={}",
-    discovery_port, timeout_ms
-  );
-
-  let sock = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| e.to_string())?;
-  sock.set_broadcast(true).map_err(|e| e.to_string())?;
-
-  let probe = Probe {
-    t: "nascraft_discover".to_string(),
-    v: 1,
-  };
-  let payload = serde_json::to_vec(&probe).map_err(|e| e.to_string())?;
-
-  // Send to limited broadcast. On some networks, 255.255.255.255 is restricted, but this is a good default.
-  let broadcast_addr = format!("255.255.255.255:{}", discovery_port);
-  match sock.send_to(&payload, &broadcast_addr).await {
-    Ok(n) => {
-      file_info!("UDP discovery probe sent: addr={}, bytes={}", broadcast_addr, n);
-    }
-    Err(e) => {
-      file_info!("UDP discovery probe send failed: addr={}, err={}", broadcast_addr, e);
-    }
-  }
-
-  let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
-  let mut out: Vec<MdnsDiscoveredServer> = Vec::new();
-  let mut seen: HashSet<String> = HashSet::new();
-  let mut buf = vec![0u8; 2048];
-
-  while std::time::Instant::now() < deadline {
-    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-    let per_recv = std::cmp::min(remaining, std::time::Duration::from_millis(250));
-
-    match tokio::time::timeout(per_recv, sock.recv_from(&mut buf)).await {
-      Ok(Ok((n, peer))) => {
-        let resp: Result<Resp, _> = serde_json::from_slice(&buf[..n]);
-        let resp = match resp {
-          Ok(r) => r,
-          Err(e) => {
-            file_info!("UDP discovery: ignoring invalid JSON from {}: {}", peer, e);
-            continue;
-          }
-        };
-
-        if resp.t != "nascraft_here" || resp.v != 1 {
-          continue;
-        }
-
-        let port = resp.port.unwrap_or(8080);
-        let ip = peer.ip().to_string();
-        let key = format!("{}:{}", ip, port);
-        if seen.contains(&key) {
-          continue;
-        }
-        seen.insert(key);
-
-        out.push(MdnsDiscoveredServer {
-          instance_name: resp.name.unwrap_or_else(|| "nascraft".to_string()),
-          service_type: service_type.to_string(),
-          hostname: ip.clone(),
-          ip_v4: vec![ip],
-          port,
-        });
-
-        file_info!("UDP discovery response accepted: peer={}", peer);
-      }
-      Ok(Err(_e)) => {}
-      Err(_elapsed) => {}
-    }
-  }
-
-  file_info!("UDP discovery finished (mobile): services_found={}", out.len());
-  if out.is_empty() {
-    file_info!("UDP discovery finished (mobile): no services discovered");
-  }
-
-  Ok(out)
+async fn discover_nascraft_services(timeout_ms: Option<u64>, broadcast_addrs: Option<Vec<String>>) -> Result<Vec<MdnsDiscoveredServer>, String> {
+  panic!("discover_nascraft_services is not implemented on mobile")
 }
 
 #[derive(Debug, Serialize)]
@@ -508,12 +507,11 @@ async fn http_proxy_fetch(req: HttpProxyRequest) -> Result<HttpProxyResponse, St
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default().plugin(tauri_plugin_fs::init())
+  tauri::Builder::default()  .plugin(tauri_plugin_fs::init())
   .plugin(tauri_plugin_os::init())
   .plugin(tauri_plugin_dialog::init())
   .plugin(tauri_plugin_http::init())
-  .plugin(tauri_plugin_photo::init())
-    .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services, update_desktop_watch_dirs,read_desktop_file_bytes,
+    .invoke_handler(tauri::generate_handler![http_proxy_fetch, discover_nascraft_services, test_mdns_discovery, update_desktop_watch_dirs,read_desktop_file_bytes,
       get_app_log_info,
       read_app_log,
       append_web_log

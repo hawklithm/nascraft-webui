@@ -1,5 +1,0 @@
-[[permission]]
-identifier = "default"
-description = "Default permissions for the photo plugin."
-commands.allow = ["checkAndRequestPermissions", "get_album_photos", "read_photo_data", "get_photo_thumbnail", "openAppSettings"]
-

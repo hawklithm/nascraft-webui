@@ -131,12 +131,10 @@ const loadApiBaseUrlFromSysConf = async (force = false) => {
     return cachedApiBaseUrl;
   }
 
-  lastLoadedAt = now;
-
   const tauri = await isTauriRuntime();
   if (!tauri) {
-    cachedApiBaseUrl = API_BASE_PATH;
-    return cachedApiBaseUrl;
+    // 非Tauri环境直接返回默认路径，不缓存
+    return API_BASE_PATH;
   }
 
   try {
@@ -161,17 +159,29 @@ const loadApiBaseUrlFromSysConf = async (force = false) => {
       }
     }
 
-    const sysConfContent = await readTextFile(SYS_CONF_NAME, { baseDir: BaseDirectory.AppConfig });
-    const sysConfJson = JSON.parse(sysConfContent);
-    const host = normalizeHost(sysConfJson.host);
-    console.log('[nascraft] sys.conf loaded:', { host: host || null });
+    // 尝试读取sys.conf，如果文件不存在或解析失败，则视为没有配置
+    let sysConfJson = {};
+    let host = null;
+    try {
+      const sysConfContent = await readTextFile(SYS_CONF_NAME, { baseDir: BaseDirectory.AppConfig });
+      sysConfJson = JSON.parse(sysConfContent);
+      host = normalizeHost(sysConfJson.host);
+      console.log('[nascraft] sys.conf loaded:', { host: host || null });
+    } catch (e) {
+      console.log('[nascraft] sys.conf not found or invalid, will try discovery:', e.message);
+      // 文件不存在或解析失败，继续尝试发现
+    }
+
     if (host) {
       console.log('[nascraft] probing configured host:', host);
       const ok = await probeHello(host);
       if (ok) {
         console.log('[nascraft] configured host is reachable:', host);
-        cachedApiBaseUrl = `${host}${API_BASE_PATH}`;
-        return cachedApiBaseUrl;
+        const apiBaseUrl = `${host}${API_BASE_PATH}`;
+        // 只有成功时才更新缓存
+        cachedApiBaseUrl = apiBaseUrl;
+        lastLoadedAt = now;
+        return apiBaseUrl;
       }
       console.log('[nascraft] configured host is NOT reachable, will try discovery:', host);
     }
@@ -179,8 +189,34 @@ const loadApiBaseUrlFromSysConf = async (force = false) => {
     // If host is not configured or not reachable, try to discover a nascraft server via mDNS.
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const list = await invoke('discover_nascraft_services', { timeout_ms: 1500 });
-      console.log('[nascraft] discovery result:', { count: Array.isArray(list) ? list.length : null, list });
+      const { platform } = await import('@tauri-apps/plugin-os');
+      let broadcastAddrs = undefined;
+
+      // 仅在Android平台获取多播锁
+      const currentPlatform = await platform();
+      if (currentPlatform === 'android') {
+        try {
+          await invoke('plugin:network|acquireMulticastLock');
+          console.log('[nascraft] multicast lock acquired for discovery');
+        } catch (lockError) {
+          console.warn('[nascraft] failed to acquire multicast lock:', lockError);
+          // 继续尝试发现
+        }
+      }
+
+      const list = await invoke('discover_nascraft_services', { timeout_ms: 5000, broadcast_addrs: broadcastAddrs });
+      console.log('[nascraft] discovery result:', JSON.stringify({ count: Array.isArray(list) ? list.length : null, list }));
+
+      // 释放多播锁
+      if (currentPlatform === 'android') {
+        try {
+          await invoke('plugin:network|releaseMulticastLock');
+          console.log('[nascraft] multicast lock released');
+        } catch (lockError) {
+          console.warn('[nascraft] failed to release multicast lock:', lockError);
+        }
+      }
+
       if (Array.isArray(list) && list.length > 0) {
         const candidates = [];
         for (const svc of list) {
@@ -203,15 +239,28 @@ const loadApiBaseUrlFromSysConf = async (force = false) => {
           const ok = await probeHello(candidateHost);
           if (ok) {
             console.log('[nascraft] discovered candidate selected:', candidateHost);
+            // 更新sys.conf保存发现的主机
             sysConfJson.host = candidateHost;
+            if (!Array.isArray(sysConfJson.watchDir)) {
+              sysConfJson.watchDir = [];
+            }
+            if (typeof sysConfJson.interval !== 'number') {
+              sysConfJson.interval = 10;
+            }
+            if (typeof sysConfJson.autoUploadAlbum !== 'boolean') {
+              sysConfJson.autoUploadAlbum = false;
+            }
             try {
               await writeTextFile(SYS_CONF_NAME, JSON.stringify(sysConfJson, null, 2), { baseDir: BaseDirectory.AppConfig });
               console.log('[nascraft] sys.conf updated with host:', candidateHost);
             } catch (e) {
               console.log('write sys.conf host failed:', e);
             }
-            cachedApiBaseUrl = `${candidateHost}${API_BASE_PATH}`;
-            return cachedApiBaseUrl;
+            const apiBaseUrl = `${candidateHost}${API_BASE_PATH}`;
+            // 只有成功时才更新缓存
+            cachedApiBaseUrl = apiBaseUrl;
+            lastLoadedAt = now;
+            return apiBaseUrl;
           }
         }
       }
@@ -220,9 +269,10 @@ const loadApiBaseUrlFromSysConf = async (force = false) => {
       console.log('mDNS discovery failed:', e);
     }
 
+    // 所有尝试都失败，抛出错误但不更新缓存
     throw new Error('网络异常，服务端不在线');
   } catch (e) {
-    cachedApiBaseUrl = API_BASE_PATH;
+    // 失败时不更新缓存，只抛出异常
     throw e;
   }
 };
