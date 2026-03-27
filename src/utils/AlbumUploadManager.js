@@ -147,35 +147,54 @@ export class AlbumUploadManager {
       const md5Hash = await calculateMD5(file);
       console.log(`File MD5: ${md5Hash}`);
 
-      // 提交元数据
+      // 提交元数据（包含服务端去重检查）
       const metaData = await submitMetadata(file, md5Hash, '');
-      const { chunks, total_chunks } = metaData;
-
-        // 创建或加载上传状态机
+      
+      // 检查服务端是否返回跳过标志（文件已存在）
+      if (metaData.skipped === true) {
+        console.log(`File ${photoInfo.name} already exists on server (deduplication), skipping upload`);
+        console.log(`Existing file info: fileId=${metaData.id}, filename=${metaData.filename}`);
+        
+        // 更新本地状态为已完成
         const stateMachine = await UploadStateMachine.loadOrCreate(
           photoInfo.uri,
           file.size,
-          total_chunks,
+          0,
           md5Hash
         );
-
-        // 如果已完成，跳过
-        if (stateMachine.status === UploadStatus.COMPLETED) {
-          console.log(`File ${photoInfo.name} already uploaded, skipping`);
-          return;
-        }
-
-        // 设置文件 ID
-        stateMachine.setFileId(metaData.id);
-        stateMachine.setStatus(UploadStatus.UPLOADING);
+        stateMachine.setStatus(UploadStatus.COMPLETED);
         await stateMachine.saveState();
+        
+        return;
+      }
+      
+      const { chunks, total_chunks } = metaData;
 
-        // 更新上传进度
-        const progressCallback = (uri, progress, status) => {
-          if (progressCallback) {
-            progressCallback(uri, progress, status);
-          }
-        };
+      // 创建或加载上传状态机
+      const stateMachine = await UploadStateMachine.loadOrCreate(
+        photoInfo.uri,
+        file.size,
+        total_chunks,
+        md5Hash
+      );
+
+      // 如果已完成，跳过
+      if (stateMachine.status === UploadStatus.COMPLETED) {
+        console.log(`File ${photoInfo.name} already uploaded (local state), skipping`);
+        return;
+      }
+
+      // 设置文件 ID
+      stateMachine.setFileId(metaData.id);
+      stateMachine.setStatus(UploadStatus.UPLOADING);
+      await stateMachine.saveState();
+
+      // 更新上传进度
+      const progressCallback = (uri, progress, status) => {
+        if (progressCallback) {
+          progressCallback(uri, progress, status);
+        }
+      };
 
       // 上传分片（支持断点续传）
       for (const chunk of chunks) {

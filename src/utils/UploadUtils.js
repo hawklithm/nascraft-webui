@@ -97,10 +97,10 @@ export const uploadChunk = async (file, chunk, fileId) => {
  * @param {Blob} file - 文件 Blob 对象
  * @param {string} md5Hash - 文件的 MD5 哈希值
  * @param {string} description - 文件描述
- * @returns {Promise<Object>} 服务器返回的元数据 { id, chunks, total_chunks }
+ * @returns {Promise<Object>} 服务器返回的元数据 { id, chunks, total_chunks, skipped }
  */
 export const submitMetadata = async (file, md5Hash, description = '') => {
-  const metaData = await apiFetch('/submit_metadata', {
+  const response = await apiFetch('/submit_metadata', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -113,5 +113,6 @@ export const submitMetadata = async (file, md5Hash, description = '') => {
     }),
   });
 
-  return metaData;
+  // 返回完整的数据对象，包含 skipped 标志
+  return response;
 };

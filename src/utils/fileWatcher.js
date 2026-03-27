@@ -195,6 +195,14 @@ const handleFileUpload = async (filePath) => {
       }),
     });
 
+    // 检查是否为重复文件（服务端已存在）
+    if (metaData.skipped === true) {
+      console.log(`File ${filePath} already exists on server (deduplication), skipping upload`);
+      console.log(`Existing file info: fileId=${metaData.id}, filename=${metaData.filename}`);
+      updateUploadProgress(filePath, 100, 'success');
+      return;
+    }
+
     const { chunks } = metaData;
     let completedChunks = 0;
     const totalChunks = chunks.length;
